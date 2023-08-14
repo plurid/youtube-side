@@ -14,6 +14,7 @@
     import {
         InputSwitch,
         InputLine,
+        LinkButton,
     } from '@plurid/plurid-ui-components-react';
     // #endregion libraries
 
@@ -25,6 +26,7 @@
 
     import {
         OPTIONS_KEY,
+        defaultOptions,
     } from '~data/constants';
     // #endregion external
 
@@ -57,11 +59,6 @@ const Popup: React.FC<PopupProperties> = (
 
     // #region state
     const [
-        active,
-        setActive,
-    ] = useState(false);
-
-    const [
         background,
         setBackground,
     ] = useState(false);
@@ -83,21 +80,17 @@ const Popup: React.FC<PopupProperties> = (
     // #endregion state
 
 
+    // #region handlers
+    const reset = () => {
+        setBackground(false);
+        setLeftSide(defaultOptions.left);
+        setWidth(defaultOptions.width);
+        setHeight(defaultOptions.height);
+    }
+    // #endregion handlers
+
+
     // #region effects
-    useEffect(() => {
-        const getActiveTab = async () => {
-            try {
-                const activeTab = await chrome.tabs.query({
-                    active: true,
-                });
-            } catch (error) {
-                return;
-            }
-        }
-
-        getActiveTab();
-    }, []);
-
     useEffect(() => {
         const load = async () => {
             try {
@@ -124,16 +117,6 @@ const Popup: React.FC<PopupProperties> = (
 
         load();
     }, []);
-
-    useEffect(() => {
-        if (!mounted.current) {
-            return;
-        }
-
-        // send message to tab
-    }, [
-        active,
-    ]);
 
     useEffect(() => {
         if (!mounted.current) {
@@ -187,18 +170,6 @@ const Popup: React.FC<PopupProperties> = (
             <div>
                 press alt/option (⌥) + S on a YouTube page to activate side positioning
             </div>
-
-            {/* <InputSwitch
-                name="active"
-                checked={active}
-                atChange={() => {
-                    setActive(value => !value);
-                }}
-                theme={dewiki}
-                style={{
-                    ...inputStyle,
-                }}
-            /> */}
 
             <InputSwitch
                 name="background [⌥ + B]"
@@ -265,6 +236,20 @@ const Popup: React.FC<PopupProperties> = (
                     ...inputStyle,
                 }}
             />
+
+            <div>
+                <LinkButton
+                    text="reset"
+                    atClick={() => {
+                        reset();
+                    }}
+                    theme={dewiki}
+                    style={{
+                        marginTop: '2rem',
+                    }}
+                    inline={true}
+                />
+            </div>
         </StyledPopup>
     );
     // #endregion render
