@@ -27,7 +27,6 @@ const cleanup = async () => {
     }
 
     const cleanupFiles = [
-        'contentscript.js',
         'popup.js',
     ];
 
