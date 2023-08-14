@@ -39,6 +39,11 @@
 
 
 // #region module
+const inputStyle = {
+    width: '250px',
+};
+
+
 export interface PopupProperties {
 }
 
@@ -183,7 +188,7 @@ const Popup: React.FC<PopupProperties> = (
                 press alt/option (⌥) + S on a YouTube page to activate side positioning
             </div>
 
-            <InputSwitch
+            {/* <InputSwitch
                 name="active"
                 checked={active}
                 atChange={() => {
@@ -191,19 +196,19 @@ const Popup: React.FC<PopupProperties> = (
                 }}
                 theme={dewiki}
                 style={{
-                    width: '200px',
+                    ...inputStyle,
                 }}
-            />
+            /> */}
 
             <InputSwitch
-                name="background"
+                name="background [⌥ + B]"
                 checked={background}
                 atChange={() => {
                     setBackground(value => !value);
                 }}
                 theme={dewiki}
                 style={{
-                    width: '200px',
+                    ...inputStyle,
                 }}
             />
 
@@ -215,7 +220,7 @@ const Popup: React.FC<PopupProperties> = (
                 }}
                 theme={dewiki}
                 style={{
-                    width: '200px',
+                    ...inputStyle,
                 }}
             />
 
@@ -236,7 +241,7 @@ const Popup: React.FC<PopupProperties> = (
                     type: 'number',
                 }}
                 style={{
-                    width: '200px',
+                    ...inputStyle,
                 }}
             />
 
@@ -257,7 +262,7 @@ const Popup: React.FC<PopupProperties> = (
                     type: 'number',
                 }}
                 style={{
-                    width: '200px',
+                    ...inputStyle,
                 }}
             />
         </StyledPopup>

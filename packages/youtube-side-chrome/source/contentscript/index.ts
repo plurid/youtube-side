@@ -16,6 +16,7 @@
 let toggled = false;
 
 
+
 const BELOW_ID = 'below';
 const getBelow = () => document.getElementById(BELOW_ID);
 
@@ -28,6 +29,21 @@ const getOptions = async () => {
     return options[OPTIONS_KEY] as Options;
 }
 
+const getThemeType = () => {
+    const value = getComputedStyle(document.documentElement)
+        .getPropertyValue('--yt-spec-base-background');
+
+    if (value === '#fff'
+        || value === 'white'
+        || value === '#ffffff'
+        || value === 'rgb(255, 255, 255)'
+    ) {
+        return 'light';
+    }
+
+    return 'dark';
+}
+
 const renderSide = (
     options: Options,
 ) => {
@@ -35,6 +51,8 @@ const renderSide = (
     if (!below) {
         return;
     }
+
+    const themeType = getThemeType();
 
     below.style.cssText = `
         position: absolute;
@@ -46,7 +64,13 @@ const renderSide = (
         right: ${options.left ? 'auto' : '25px'};
         width: ${options.width}px;
         height: ${options.height}px;
-        background: ${options.background};
+        background: ${
+            options.background === 'transparent'
+                ? 'transparent'
+                : themeType === 'light'
+                    ? 'white'
+                    : 'black'
+        };
     `;
 }
 
