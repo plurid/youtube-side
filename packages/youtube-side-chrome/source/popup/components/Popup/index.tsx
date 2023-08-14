@@ -1,6 +1,7 @@
 // #region imports
     // #region libraries
     import React, {
+        useRef,
         useState,
         useEffect,
     } from 'react';
@@ -44,6 +45,11 @@ export interface PopupProperties {
 const Popup: React.FC<PopupProperties> = (
     _properties,
 ) => {
+    // #region references
+    const mounted = useRef(false);
+    // #endregion references
+
+
     // #region state
     const [
         active,
@@ -91,7 +97,7 @@ const Popup: React.FC<PopupProperties> = (
         const load = async () => {
             try {
                 const data = await chrome.storage.local.get(OPTIONS_KEY);
-                if (!data || !data.youtubeSideOptions) {
+                if (!data || !data[OPTIONS_KEY]) {
                     return;
                 }
 
@@ -100,7 +106,7 @@ const Popup: React.FC<PopupProperties> = (
                     left,
                     width,
                     height,
-                } = data.youtubeSideOptions as Options;
+                } = data[OPTIONS_KEY] as Options;
 
                 setBackground(background === 'black');
                 setLeftSide(left);
@@ -115,12 +121,20 @@ const Popup: React.FC<PopupProperties> = (
     }, []);
 
     useEffect(() => {
+        if (!mounted.current) {
+            return;
+        }
+
         // send message to tab
     }, [
         active,
     ]);
 
     useEffect(() => {
+        if (!mounted.current) {
+            return;
+        }
+
         const save = async () => {
             try {
                 const options: Options = {
@@ -145,6 +159,14 @@ const Popup: React.FC<PopupProperties> = (
         width,
         height,
     ]);
+
+    useEffect(() => {
+        mounted.current = true;
+
+        return () => {
+            mounted.current = false;
+        }
+    }, []);
     // #endregion effects
 
 

@@ -1,7 +1,6 @@
 // #region imports
     // #region external
     import {
-        defaultOptions,
         OPTIONS_KEY,
     } from '~data/constants';
 
@@ -43,7 +42,7 @@ const renderSide = (
     `;
 }
 
-const toggleSide = () => {
+const toggleSide = async () => {
     const below = getBelow();
     if (!below) {
         return;
@@ -55,7 +54,12 @@ const toggleSide = () => {
         return;
     }
 
-    renderSide(defaultOptions);
+    const options = await chrome.storage.local.get(OPTIONS_KEY);
+    if (!options || !options[OPTIONS_KEY]) {
+        return;
+    }
+
+    renderSide(options[OPTIONS_KEY]);
     toggled = true;
 }
 
