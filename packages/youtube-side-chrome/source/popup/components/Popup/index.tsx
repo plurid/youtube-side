@@ -34,6 +34,7 @@
     // #region internal
     import {
         StyledPopup,
+        inputStyle,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -41,11 +42,6 @@
 
 
 // #region module
-const inputStyle = {
-    width: '250px',
-};
-
-
 export interface PopupProperties {
 }
 
@@ -58,6 +54,11 @@ const Popup: React.FC<PopupProperties> = (
 
 
     // #region state
+    const [
+        loading,
+        setLoading,
+    ] = useState(true);
+
     const [
         background,
         setBackground,
@@ -110,6 +111,8 @@ const Popup: React.FC<PopupProperties> = (
                 setLeftSide(left);
                 setWidth(width);
                 setHeight(height);
+
+                setLoading(false);
             } catch (error) {
                 return;
             }
@@ -159,6 +162,15 @@ const Popup: React.FC<PopupProperties> = (
 
 
     // #region render
+    if (loading) {
+        return (
+            <StyledPopup
+                theme={dewiki}
+            >
+            </StyledPopup>
+        );
+    }
+
     return (
         <StyledPopup
             theme={dewiki}

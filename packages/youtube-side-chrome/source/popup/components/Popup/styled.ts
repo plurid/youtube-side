@@ -25,4 +25,9 @@ export const StyledPopup = styled.div`
     padding: 2rem;
     grid-gap: 1rem;
 `;
+
+
+export const inputStyle = {
+    width: '250px',
+};
 // #endregion module
