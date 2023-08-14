@@ -107,7 +107,7 @@ const Popup: React.FC<PopupProperties> = (
                     height,
                 } = data[OPTIONS_KEY] as Options;
 
-                setBackground(background === 'black');
+                setBackground(background === 'opaque');
                 setLeftSide(left);
                 setWidth(width);
                 setHeight(height);
@@ -129,7 +129,7 @@ const Popup: React.FC<PopupProperties> = (
         const save = async () => {
             try {
                 const options: Options = {
-                    background: background ? 'black' : 'transparent',
+                    background: background ? 'opaque' : 'transparent',
                     left: leftSide,
                     width,
                     height,

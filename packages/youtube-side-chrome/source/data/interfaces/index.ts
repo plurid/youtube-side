@@ -1,6 +1,6 @@
 // #region exports
 export interface Options {
-    background: 'transparent' | 'black';
+    background: 'transparent' | 'opaque';
     width: number;
     height: number;
     left: boolean;

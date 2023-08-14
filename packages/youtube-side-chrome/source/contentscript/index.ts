@@ -108,7 +108,7 @@ const toggleBackground = async () => {
     const updatedOptions: Options = {
         ...options,
         background: options.background === 'transparent'
-            ? 'black'
+            ? 'opaque'
             : 'transparent',
     };
 

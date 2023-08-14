@@ -1,13 +1,23 @@
+// #region imports
+    // #region external
+    import {
+        Options,
+    } from '~data/interfaces';
+    // #endregion external
+// #endregion imports
+
+
+
 // #region module
 export const IN_PRODUCTION = process.env.NODE_ENV === 'production';
 
 
-export const defaultOptions = {
+export const defaultOptions: Options = {
     background: 'transparent',
     width: 500,
     height: 550,
     left: true,
-} as const;
+};
 
 
 export const OPTIONS_KEY = 'youtubeSideOptions';
