@@ -31,3 +31,12 @@
 
 
 ## About
+
+`YouTube Side` displaces the video description and comments on the side of the YouTube video for a better experience.
+
+The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-side).
+
+Features:
++ toggle with shortcut (alt/option + S)
++ change background (black/transparent)
++ resize
