@@ -180,7 +180,7 @@ const Popup: React.FC<PopupProperties> = (
             </h1>
 
             <div>
-                press alt/option (⌥) + S on a YouTube page toggling description and comments side position
+                press alt/option (⌥) + S on a YouTube page to activate side positioning
             </div>
 
             <InputSwitch
