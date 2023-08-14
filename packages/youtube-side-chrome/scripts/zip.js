@@ -14,7 +14,6 @@ const DEST_ZIP_DIR = path.join(__dirname, '../distribution-zip');
 const cleanup = async () => {
     const rmPaths = [
         './assets/.gitkeep',
-        'contentscript.js.LICENSE.txt',
         'popup.js.LICENSE.txt',
     ];
 
