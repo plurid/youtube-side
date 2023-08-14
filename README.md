@@ -37,6 +37,6 @@
 The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-side).
 
 Features:
-+ toggle with shortcut (alt/option + S)
-+ change background (black/transparent)
++ toggle with shortcut [alt/option + S]
++ change background (themed/transparent) [alt/option + B]
 + resize
