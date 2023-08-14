@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "~common/*": [
+                "./source/common/*"
+            ],
+            "~contentscript/*": [
+                "./source/contentscript/*"
+            ],
+            "~data/*": [
+                "./source/data/*"
+            ],
+            "~popup/*": [
+                "./source/popup/*"
+            ],
+        },
+
+        "outDir": "./distribution/",
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "module": "es6",
+        "target": "es5",
+        "jsx": "react",
+        "allowJs": true,
+        "allowSyntheticDefaultImports": true,
+        "moduleResolution": "node",
+        "isolatedModules": true
+    }
+}
