@@ -24,6 +24,7 @@ export const StyledPopup = styled.div`
     justify-items: center;
     padding: 2rem;
     grid-gap: 1rem;
+    line-height: 1.5;
 `;
 
 
