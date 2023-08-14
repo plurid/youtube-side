@@ -19,6 +19,14 @@ let toggled = false;
 const BELOW_ID = 'below';
 const getBelow = () => document.getElementById(BELOW_ID);
 
+const getOptions = async () => {
+    const options = await chrome.storage.local.get(OPTIONS_KEY);
+    if (!options || !options[OPTIONS_KEY]) {
+        return;
+    }
+
+    return options[OPTIONS_KEY] as Options;
+}
 
 const renderSide = (
     options: Options,
@@ -54,13 +62,31 @@ const toggleSide = async () => {
         return;
     }
 
-    const options = await chrome.storage.local.get(OPTIONS_KEY);
-    if (!options || !options[OPTIONS_KEY]) {
+    const options = await getOptions();
+    if (!options) {
         return;
     }
 
-    renderSide(options[OPTIONS_KEY]);
+    renderSide(options);
     toggled = true;
+}
+
+const toggleBackground = async () => {
+    if (!toggled) {
+        return;
+    }
+
+    const options = await getOptions();
+    if (!options) {
+        return;
+    }
+
+    renderSide({
+        ...options,
+        background: options.background === 'transparent'
+            ? 'black'
+            : 'transparent',
+    });
 }
 
 
@@ -68,8 +94,18 @@ const toggleSide = async () => {
 const main = async () => {
     try {
         document.addEventListener('keydown', (event) => {
-            if (event.altKey && event.code === 'KeyS') {
-                toggleSide();
+            try {
+                if (event.altKey && event.code === 'KeyS') {
+                    toggleSide();
+                    return;
+                }
+
+                if (event.altKey && event.code === 'KeyB') {
+                    toggleBackground();
+                    return;
+                }
+            } catch (error) {
+                return;
             }
         });
 
