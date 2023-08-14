@@ -97,6 +97,7 @@ const Popup: React.FC<PopupProperties> = (
             try {
                 const data = await chrome.storage.local.get(OPTIONS_KEY);
                 if (!data || !data[OPTIONS_KEY]) {
+                    setLoading(false);
                     return;
                 }
 
@@ -114,6 +115,7 @@ const Popup: React.FC<PopupProperties> = (
 
                 setLoading(false);
             } catch (error) {
+                setLoading(false);
                 return;
             }
         }

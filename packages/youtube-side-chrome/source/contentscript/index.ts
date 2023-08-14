@@ -2,6 +2,7 @@
     // #region external
     import {
         OPTIONS_KEY,
+        defaultOptions,
     } from '~data/constants';
 
     import {
@@ -20,10 +21,10 @@ let toggled = false;
 const BELOW_ID = 'below';
 const getBelow = () => document.getElementById(BELOW_ID);
 
-const getOptions = async () => {
+const getOptions = async (): Promise<Options> => {
     const options = await chrome.storage.local.get(OPTIONS_KEY);
     if (!options || !options[OPTIONS_KEY]) {
-        return;
+        return defaultOptions;
     }
 
     return options[OPTIONS_KEY] as Options;
@@ -87,11 +88,8 @@ const toggleSide = async () => {
     }
 
     const options = await getOptions();
-    if (!options) {
-        return;
-    }
-
     renderSide(options);
+
     toggled = true;
 }
 
@@ -101,10 +99,6 @@ const toggleBackground = async () => {
     }
 
     const options = await getOptions();
-    if (!options) {
-        return;
-    }
-
     const updatedOptions: Options = {
         ...options,
         background: options.background === 'transparent'
@@ -145,7 +139,10 @@ const main = async () => {
                     return;
                 }
 
-                const options = changes[OPTIONS_KEY].newValue;
+                const options = changes[OPTIONS_KEY].newValue as Options;
+                if (!options) {
+                    return;
+                }
                 renderSide(options);
             } catch (error) {
                 return;
