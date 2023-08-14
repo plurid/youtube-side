@@ -81,12 +81,18 @@ const toggleBackground = async () => {
         return;
     }
 
-    renderSide({
+    const updatedOptions: Options = {
         ...options,
         background: options.background === 'transparent'
             ? 'black'
             : 'transparent',
+    };
+
+    await chrome.storage.local.set({
+        [OPTIONS_KEY]: updatedOptions,
     });
+
+    renderSide(updatedOptions);
 }
 
 
