@@ -1,14 +1,20 @@
+// #region imports
+    // #region external
+    import {
+        defaultOptions,
+        OPTIONS_KEY,
+    } from '~data/constants';
+
+    import {
+        Options,
+    } from '~data/interfaces';
+    // #endregion external
+// #endregion imports
+
+
+
 // #region module
 let toggled = false;
-
-const options = {
-    background: 'transparent',
-    width: 500,
-    height: 550,
-    left: true,
-};
-
-type Options = typeof options;
 
 
 const BELOW_ID = 'below';
@@ -28,6 +34,7 @@ const renderSide = (
         top: 56px;
         z-index: 2019;
         overflow: auto;
+        padding: 1rem;
         left: ${options.left ? '25px' : 'auto'};
         right: ${options.left ? 'auto' : '25px'};
         width: ${options.width}px;
@@ -48,7 +55,7 @@ const toggleSide = () => {
         return;
     }
 
-    renderSide(options);
+    renderSide(defaultOptions);
     toggled = true;
 }
 
@@ -61,15 +68,23 @@ const main = async () => {
                 toggleSide();
             }
         });
+
+        chrome.storage.onChanged.addListener((changes) => {
+            try {
+                if (!toggled) {
+                    return;
+                }
+
+                const options = changes[OPTIONS_KEY].newValue;
+                renderSide(options);
+            } catch (error) {
+                return;
+            }
+        });
     } catch (error) {
+        return;
     }
 }
 
 main();
 // #endregion module
-
-
-
-// #region exports
-export {};
-// #endregion exports
