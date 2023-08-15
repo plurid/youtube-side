@@ -22,12 +22,16 @@ const BELOW_ID = 'below';
 const getBelow = () => document.getElementById(BELOW_ID);
 
 const getOptions = async (): Promise<Options> => {
-    const options = await chrome.storage.local.get(OPTIONS_KEY);
-    if (!options || !options[OPTIONS_KEY]) {
+    try {
+        const options = await chrome.storage.local.get(OPTIONS_KEY);
+        if (!options || !options[OPTIONS_KEY]) {
+            return defaultOptions;
+        }
+
+        return options[OPTIONS_KEY] as Options;
+    } catch (error) {
         return defaultOptions;
     }
-
-    return options[OPTIONS_KEY] as Options;
 }
 
 const getThemeType = () => {
