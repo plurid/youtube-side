@@ -23,7 +23,8 @@ const getBelow = () => document.getElementById(BELOW_ID);
 
 const getOptions = async (): Promise<Options> => {
     try {
-        const options = await chrome.storage.local.get(OPTIONS_KEY);
+        const options = await chrome.storage.local.get(OPTIONS_KEY)
+            .catch(() => {});
         if (!options || !options[OPTIONS_KEY]) {
             return defaultOptions;
         }
@@ -165,5 +166,5 @@ const main = async () => {
     }
 }
 
-main();
+main().catch(() => {});
 // #endregion module
