@@ -35,18 +35,22 @@ const getOptions = async (): Promise<Options> => {
 }
 
 const getThemeType = () => {
-    const value = getComputedStyle(document.documentElement)
-        .getPropertyValue('--yt-spec-base-background');
+    try {
+        const value = getComputedStyle(document.documentElement)
+            .getPropertyValue('--yt-spec-base-background');
 
-    if (value === '#fff'
-        || value === 'white'
-        || value === '#ffffff'
-        || value === 'rgb(255, 255, 255)'
-    ) {
-        return 'light';
+        if (value === '#fff'
+            || value === 'white'
+            || value === '#ffffff'
+            || value === 'rgb(255, 255, 255)'
+        ) {
+            return 'light';
+        }
+
+        return 'dark';
+    } catch (error) {
+        return 'dark';
     }
-
-    return 'dark';
 }
 
 const renderSide = (
@@ -110,11 +114,15 @@ const toggleBackground = async () => {
             : 'transparent',
     };
 
-    await chrome.storage.local.set({
-        [OPTIONS_KEY]: updatedOptions,
-    });
+    try {
+        await chrome.storage.local.set({
+            [OPTIONS_KEY]: updatedOptions,
+        });
 
-    renderSide(updatedOptions);
+        renderSide(updatedOptions);
+    } catch (error) {
+        return;
+    }
 }
 
 
