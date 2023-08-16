@@ -21,6 +21,9 @@ let toggled = false;
 const BELOW_ID = 'below';
 const getBelow = () => document.getElementById(BELOW_ID);
 
+const CHAT_ID = 'chat-container';
+const getChat = () => document.getElementById(CHAT_ID);
+
 const getOptions = async (): Promise<Options> => {
     try {
         const options = await chrome.storage.local.get(OPTIONS_KEY)
@@ -84,20 +87,47 @@ const renderSide = (
     `;
 }
 
-const toggleSide = async () => {
-    const below = getBelow();
-    if (!below) {
+const renderChat = (
+    options: Options,
+) => {
+    if (toggled) {
         return;
     }
 
+    const chat = getChat();
+    if (!chat) {
+        return;
+    }
+
+    const rect = chat.getBoundingClientRect();
+    const positionRelativeToTop = rect.top + window.scrollY;
+    const top = positionRelativeToTop - 56;
+
+    chat.style.cssText = `
+        position: absolute;
+        top: -${top}px;
+        width: 400px;
+    `;
+}
+
+const toggleSide = async () => {
+    const below = getBelow();
+    const chat = getChat();
+
     if (toggled) {
-        below.style.cssText = '';
+        if (below) {
+            below.style.cssText = '';
+        }
+        if (chat) {
+            chat.style.cssText = '';
+        }
         toggled = false;
         return;
     }
 
     const options = await getOptions();
     renderSide(options);
+    renderChat(options);
 
     toggled = true;
 }
@@ -121,6 +151,7 @@ const toggleBackground = async () => {
         });
 
         renderSide(updatedOptions);
+        renderChat(updatedOptions);
     } catch (error) {
         return;
     }
