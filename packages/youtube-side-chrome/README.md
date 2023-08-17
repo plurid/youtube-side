@@ -4,7 +4,7 @@
 
 
 <p align="center">
-    <a href="https://chrome.google.com/webstore/detail/youtube-side">
+    <a href="https://chrome.google.com/webstore/detail/youtube-side/ehjnomdbkamcdhadcaghaflklcfhgonl">
         <img src="https://img.shields.io/badge/chrome-v1.0.0-blue.svg?colorB=004F91&style=for-the-badge" alt="Chrome Version">
     </a>
     <a href="https://github.com/plurid/youtube-side/blob/master/LICENSE">
@@ -34,7 +34,7 @@
 
 `YouTube Side` displaces the video description and comments on the side of the YouTube video for a better experience.
 
-The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-side).
+The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-side/ehjnomdbkamcdhadcaghaflklcfhgonl).
 
 Features:
 + toggle with shortcut [alt/option + S]
