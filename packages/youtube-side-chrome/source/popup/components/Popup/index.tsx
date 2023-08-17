@@ -198,7 +198,7 @@ const Popup: React.FC<PopupProperties> = (
             />
 
             <InputSwitch
-                name="left side"
+                name="left side [⌥ + L]"
                 checked={leftSide}
                 atChange={() => {
                     setLeftSide(value => !value);

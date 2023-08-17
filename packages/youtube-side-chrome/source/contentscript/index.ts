@@ -157,6 +157,29 @@ const toggleBackground = async () => {
     }
 }
 
+const toggleLeft = async () => {
+    if (!toggled) {
+        return;
+    }
+
+    const options = await getOptions();
+    const updatedOptions: Options = {
+        ...options,
+        left: !options.left,
+    };
+
+    try {
+        await chrome.storage.local.set({
+            [OPTIONS_KEY]: updatedOptions,
+        });
+
+        renderSide(updatedOptions);
+        renderChat(updatedOptions);
+    } catch (error) {
+        return;
+    }
+}
+
 
 
 const main = async () => {
@@ -170,6 +193,11 @@ const main = async () => {
 
                 if (event.altKey && event.code === 'KeyB') {
                     toggleBackground();
+                    return;
+                }
+
+                if (event.altKey && event.code === 'KeyL') {
+                    toggleLeft();
                     return;
                 }
             } catch (error) {
