@@ -34,6 +34,10 @@
 
 `YouTube Side` displaces the video description and comments on the side of the YouTube video for a better experience.
 
+<p align="center">
+    <img src="https://raw.githubusercontent.com/plurid/youtube-side/master/about/images/ss-1.png" height="500px">
+</p>
+
 The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-side/ehjnomdbkamcdhadcaghaflklcfhgonl).
 
 Features:
