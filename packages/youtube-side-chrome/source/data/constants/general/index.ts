@@ -14,6 +14,7 @@ export const IN_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export const defaultOptions: Options = {
     background: 'transparent',
+    blurred: false,
     width: 500,
     height: 550,
     left: true,

@@ -57,6 +57,26 @@ const getThemeType = () => {
     }
 }
 
+const resolveBackground = (
+    backgroundColor: 'transparent' | 'opaque',
+    blurred: boolean,
+) => {
+    if (backgroundColor === 'transparent') {
+        return 'transparent';
+    }
+
+    if (blurred) {
+        return 'rgba(255, 255, 255, 0.2)';
+    }
+
+    const themeType = getThemeType();
+    if (themeType === 'light') {
+        return 'white';
+    }
+
+    return 'black';
+}
+
 const renderSide = (
     options: Options,
 ) => {
@@ -64,8 +84,6 @@ const renderSide = (
     if (!below) {
         return;
     }
-
-    const themeType = getThemeType();
 
     below.style.cssText = `
         position: absolute;
@@ -77,13 +95,8 @@ const renderSide = (
         right: ${options.left ? 'auto' : '25px'};
         width: ${options.width}px;
         height: ${options.height}px;
-        background: ${
-            options.background === 'transparent'
-                ? 'transparent'
-                : themeType === 'light'
-                    ? 'white'
-                    : 'black'
-        };
+        background: ${resolveBackground(options.background, options.blurred)};
+        backdrop-filter: ${options.blurred ? 'blur(5px)' : 'initial'};
     `;
 }
 

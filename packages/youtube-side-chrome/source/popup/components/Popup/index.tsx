@@ -65,6 +65,11 @@ const Popup: React.FC<PopupProperties> = (
     ] = useState(false);
 
     const [
+        blurred,
+        setBlurred,
+    ] = useState(false);
+
+    const [
         leftSide,
         setLeftSide,
     ] = useState(true);
@@ -103,12 +108,14 @@ const Popup: React.FC<PopupProperties> = (
 
                 const {
                     background,
+                    blurred,
                     left,
                     width,
                     height,
                 } = data[OPTIONS_KEY] as Options;
 
                 setBackground(background === 'opaque');
+                setBlurred(blurred);
                 setLeftSide(left);
                 setWidth(width);
                 setHeight(height);
@@ -132,6 +139,7 @@ const Popup: React.FC<PopupProperties> = (
             try {
                 const options: Options = {
                     background: background ? 'opaque' : 'transparent',
+                    blurred,
                     left: leftSide,
                     width,
                     height,
@@ -148,6 +156,7 @@ const Popup: React.FC<PopupProperties> = (
         save();
     }, [
         background,
+        blurred,
         leftSide,
         width,
         height,
@@ -196,6 +205,20 @@ const Popup: React.FC<PopupProperties> = (
                     ...inputStyle,
                 }}
             />
+
+            {background && (
+                <InputSwitch
+                    name="blurred background"
+                    checked={blurred}
+                    atChange={() => {
+                        setBlurred(value => !value);
+                    }}
+                    theme={dewiki}
+                    style={{
+                        ...inputStyle,
+                    }}
+                />
+            )}
 
             <InputSwitch
                 name="left side [⌥ + L]"
