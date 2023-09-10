@@ -77,6 +77,21 @@ const resolveBackground = (
     return 'black';
 }
 
+const resolveBackdropFilter = (
+    backgroundColor: 'transparent' | 'opaque',
+    blurred: boolean,
+) => {
+    if (backgroundColor === 'transparent') {
+        return 'initial';
+    }
+
+    if (!blurred) {
+        return 'initial';
+    }
+
+    return 'blur(5px)';
+}
+
 const renderSide = (
     options: Options,
 ) => {
@@ -96,7 +111,7 @@ const renderSide = (
         width: ${options.width}px;
         height: ${options.height}px;
         background: ${resolveBackground(options.background, options.blurred)};
-        backdrop-filter: ${options.blurred ? 'blur(5px)' : 'initial'};
+        backdrop-filter: ${resolveBackdropFilter(options.background, options.blurred)};
     `;
 }
 
