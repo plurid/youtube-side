@@ -66,7 +66,7 @@ const resolveBackground = (
     }
 
     if (blurred) {
-        return 'rgba(255, 255, 255, 0.2)';
+        return 'rgba(0, 0, 0, 0.2)';
     }
 
     const themeType = getThemeType();
