@@ -83,6 +83,11 @@ const Popup: React.FC<PopupProperties> = (
         height,
         setHeight,
     ] = useState(550);
+
+    const [
+        recommendations,
+        setRecommendations,
+    ] = useState(true);
     // #endregion state
 
 
@@ -112,6 +117,7 @@ const Popup: React.FC<PopupProperties> = (
                     left,
                     width,
                     height,
+                    recommendations,
                 } = data[OPTIONS_KEY] as Options;
 
                 setBackground(background === 'opaque');
@@ -119,6 +125,7 @@ const Popup: React.FC<PopupProperties> = (
                 setLeftSide(left);
                 setWidth(width);
                 setHeight(height);
+                setRecommendations(recommendations);
 
                 setLoading(false);
             } catch (error) {
@@ -143,6 +150,7 @@ const Popup: React.FC<PopupProperties> = (
                     left: leftSide,
                     width,
                     height,
+                    recommendations,
                 };
 
                 await chrome.storage.local.set({
@@ -160,6 +168,7 @@ const Popup: React.FC<PopupProperties> = (
         leftSide,
         width,
         height,
+        recommendations,
     ]);
 
     useEffect(() => {
@@ -269,6 +278,18 @@ const Popup: React.FC<PopupProperties> = (
                 textline={{
                     type: 'number',
                 }}
+                style={{
+                    ...inputStyle,
+                }}
+            />
+
+            <InputSwitch
+                name="recommendations [⌥ + R]"
+                checked={recommendations}
+                atChange={() => {
+                    setRecommendations(value => !value);
+                }}
+                theme={dewiki}
                 style={{
                     ...inputStyle,
                 }}

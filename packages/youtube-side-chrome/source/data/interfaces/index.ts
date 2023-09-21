@@ -5,5 +5,6 @@ export interface Options {
     width: number;
     height: number;
     left: boolean;
+    recommendations: boolean;
 };
 // #endregion exports

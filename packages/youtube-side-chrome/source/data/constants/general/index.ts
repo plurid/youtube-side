@@ -18,6 +18,7 @@ export const defaultOptions: Options = {
     width: 500,
     height: 550,
     left: true,
+    recommendations: true,
 };
 
 

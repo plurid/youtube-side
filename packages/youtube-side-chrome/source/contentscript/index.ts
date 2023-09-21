@@ -24,6 +24,9 @@ const getBelow = () => document.getElementById(BELOW_ID);
 const CHAT_ID = 'chat-container';
 const getChat = () => document.getElementById(CHAT_ID);
 
+const RELATED_ID = 'related';
+const getRelated = () => document.getElementById(RELATED_ID);
+
 const getOptions = async (): Promise<Options> => {
     try {
         const options = await chrome.storage.local.get(OPTIONS_KEY)
@@ -208,6 +211,44 @@ const toggleLeft = async () => {
     }
 }
 
+const renderRelated = async (
+    options: Options,
+) => {
+    const related = getRelated();
+    if (!related) {
+        return;
+    }
+
+    if (typeof options.recommendations !== 'boolean') {
+        return;
+    }
+
+    if (options.recommendations) {
+        related.style.display = 'initial';
+        return
+    }
+
+    related.style.display = 'none';
+}
+
+const toggleRelated = async () => {
+    const options = await getOptions();
+    const updatedOptions: Options = {
+        ...options,
+        recommendations: !options.recommendations,
+    };
+
+    try {
+        await chrome.storage.local.set({
+            [OPTIONS_KEY]: updatedOptions,
+        });
+
+        renderRelated(updatedOptions);
+    } catch (error) {
+        return;
+    }
+}
+
 
 
 const main = async () => {
@@ -228,6 +269,11 @@ const main = async () => {
                     toggleLeft();
                     return;
                 }
+
+                if (event.altKey && event.code === 'KeyR') {
+                    toggleRelated();
+                    return;
+                }
             } catch (error) {
                 return;
             }
@@ -235,12 +281,14 @@ const main = async () => {
 
         chrome.storage.onChanged.addListener((changes) => {
             try {
-                if (!toggled) {
+                const options = changes[OPTIONS_KEY].newValue as Options;
+                if (!options) {
                     return;
                 }
 
-                const options = changes[OPTIONS_KEY].newValue as Options;
-                if (!options) {
+                renderRelated(options);
+
+                if (!toggled) {
                     return;
                 }
                 renderSide(options);
