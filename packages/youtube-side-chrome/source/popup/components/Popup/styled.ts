@@ -28,6 +28,7 @@ export const StyledPopup = styled.div`
 export const StyledOptionRow = styled.div`
     box-sizing: border-box;
     width: 250px;
+    padding-left: 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;
