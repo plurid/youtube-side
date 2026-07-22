@@ -1,22 +1,26 @@
 // #region imports
-    // #region libraries
-    import React from 'react';
+// #region libraries
+import React from 'react';
 
-    import {
-        createRoot,
-    } from 'react-dom/client';
-    // #endregion libraries
+import { createRoot } from 'react-dom/client';
+// #endregion libraries
 
+// #region internal
+import App from './App';
 
-    // #region internal
-    import App from './App';
-    // #endregion internal
+// #endregion internal
 // #endregion imports
 
-
-
 // #region module
-const application = document.getElementById('root')!;
+const application = document.getElementById('root');
 
-createRoot(application).render(<App />);
+if (!application) {
+    throw new Error('The popup root element is missing.');
+}
+
+createRoot(application).render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>,
+);
 // #endregion module

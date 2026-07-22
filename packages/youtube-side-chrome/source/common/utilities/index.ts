@@ -1,21 +1,13 @@
-// #region imports
-    // #region external
-    import {
-        IN_PRODUCTION,
-    } from '~data/constants';
-    // #endregion external
-// #endregion imports
-
-
-
-// #region module
-export const log = (
-    ...message: any[]
-) => {
-    if (IN_PRODUCTION) {
-        return;
+export const log = (...message: unknown[]): void => {
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('youtube-side ::', ...message);
     }
+};
 
-    console.log('destream ::', ...message);
-}
-// #endregion module
+export const getActiveTab = async (): Promise<chrome.tabs.Tab> => {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab || tab.id === undefined) {
+        throw new Error('No active browser tab is available');
+    }
+    return tab;
+};

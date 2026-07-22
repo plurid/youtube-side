@@ -1,10 +1,8 @@
 // #region imports
-    // #region libraries
-    import styled from 'styled-components';
-    // #endregion libraries
+// #region libraries
+import styled from 'styled-components';
+// #endregion libraries
 // #endregion imports
-
-
 
 // #region module
 export const StyledPopup = styled.div`
@@ -27,6 +25,23 @@ export const StyledPopup = styled.div`
     line-height: 1.5;
 `;
 
+export const StyledOptionRow = styled.div`
+    box-sizing: border-box;
+    width: 250px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+`;
+
+export const StyledSliders = styled.div`
+    box-sizing: border-box;
+    width: 250px;
+    padding-left: 12px;
+    display: grid;
+    grid-gap: 1rem;
+`;
 
 export const inputStyle = {
     width: '250px',

@@ -1,6 +1,6 @@
 {
     "name": "@plurid/youtube-side",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "description": "Chrome Extension for YouTube Side",
     "author": "ly3xqhl8g9 <ly3xqhl8g9@plurid.com> (https://plurid.com)",
     "keywords": [
@@ -10,6 +10,11 @@
     ],
     "license": "DEL",
     "private": true,
+    "type": "commonjs",
+    "packageManager": "pnpm@11.15.1",
+    "engines": {
+        "node": ">=24"
+    },
     "repository": {
         "type": "git",
         "url": "https://github.com/plurid/youtube-side"
@@ -22,41 +27,48 @@
         "distribution/"
     ],
     "scripts": {
-        "clean": "rm -rf distribution && rm -rf distribution-zip",
-        "build.local": "pnpm clean && deon environment ./environment/.env.local.deon webpack",
-        "build": "pnpm clean && deon environment ./environment/.env.production.deon webpack",
-        "distribute": "pnpm build && node scripts/zip.js"
+        "clean": "node scripts/clean.mjs",
+        "format": "biome check --write .",
+        "lint": "biome ci .",
+        "typecheck": "tsc --noEmit",
+        "test": "jest --runInBand",
+        "test:coverage": "jest --runInBand --coverage",
+        "build:development": "pnpm clean && webpack --mode development",
+        "build": "pnpm clean && webpack --mode production",
+        "verify:build": "node scripts/verify-build.mjs",
+        "package": "pnpm build && node scripts/package.mjs && pnpm verify:build",
+        "distribute": "pnpm package",
+        "check": "pnpm peers check && pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm package"
     },
     "dependencies": {
         "@plurid/plurid-icons-react": "0.0.0-10",
         "@plurid/plurid-themes": "0.0.0-3",
-        "@plurid/plurid-ui-components-react": "0.0.0-33",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8",
-        "styled-components": "==5.3.11"
+        "@plurid/plurid-ui-components-react": "0.0.0-34",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "styled-components": "6.4.4"
     },
     "devDependencies": {
-        "@babel/core": "^8.0.1",
-        "@babel/preset-env": "^8.0.2",
-        "@babel/preset-react": "^8.0.1",
-        "@babel/preset-typescript": "^8.0.1",
-        "@babel/register": "^8.0.1",
-        "@plurid/deon": "0.0.0-10",
-        "@types/chrome": "^0.2.2",
-        "@types/jest": "^30.0.0",
-        "@types/node": "^26.1.1",
-        "@types/react": "^19.2.17",
-        "@types/react-dom": "^19.2.3",
-        "@types/styled-components": "^5.1.36",
-        "copy-webpack-plugin": "^14.0.0",
-        "css-loader": "^7.1.4",
-        "html-webpack-plugin": "^5.6.7",
-        "jest": "^30.4.2",
-        "ts-jest": "^29.4.12",
-        "ts-loader": "^9.6.2",
-        "typescript": "^7.0.2",
-        "webpack": "^5.108.4",
-        "webpack-cli": "^7.2.1",
-        "zip-folder": "^1.0.0"
+        "@biomejs/biome": "2.5.5",
+        "@jest/globals": "30.4.1",
+        "@testing-library/jest-dom": "7.0.0",
+        "@testing-library/react": "16.3.2",
+        "@testing-library/user-event": "14.6.1",
+        "@types/archiver": "8.0.0",
+        "@types/chrome": "0.2.2",
+        "@types/node": "26.1.1",
+        "@types/react": "19.2.17",
+        "@types/react-dom": "19.2.3",
+        "archiver": "8.0.0",
+        "copy-webpack-plugin": "14.0.0",
+        "html-webpack-plugin": "5.6.7",
+        "jest": "30.4.2",
+        "jest-environment-jsdom": "30.4.1",
+        "terser-webpack-plugin": "5.6.1",
+        "ts-jest": "29.4.12",
+        "ts-loader": "9.6.2",
+        "typescript": "6.0.3",
+        "webpack": "5.108.4",
+        "webpack-cli": "7.2.1"
     }
 }

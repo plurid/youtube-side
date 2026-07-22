@@ -1,35 +1,38 @@
 {
-    "manifest_version" : 3,
-    "name" : "YouTube Side",
-    "short_name" : "YouTube Side",
-    "description" : "show YouTube video description and comments on the side of the video",
-    "version" : "1.0.4",
+    "manifest_version": 3,
+    "name": "YouTube Side",
+    "short_name": "YouTube Side",
+    "description": "show YouTube video details and comments beside the video",
+    "version": "1.0.5",
     "author": "plurid",
+    "minimum_chrome_version": "120",
 
-    "action" : {
-        "default_title" : "YouTube Side",
-        "default_icon" : "assets/icons/icon.png",
-        "default_popup" : "popup.html"
+    "action": {
+        "default_title": "YouTube Side",
+        "default_icon": "assets/icons/icon.png",
+        "default_popup": "popup.html"
     },
 
-    "icons" : {
-        "16" : "assets/icons/icon16.png",
-        "32" : "assets/icons/icon32.png",
-        "48" : "assets/icons/icon48.png",
-        "128" : "assets/icons/icon128.png"
+    "icons": {
+        "16": "assets/icons/icon16.png",
+        "32": "assets/icons/icon32.png",
+        "48": "assets/icons/icon48.png",
+        "128": "assets/icons/icon128.png"
     },
 
     "incognito": "spanning",
 
-    "content_scripts": [{
-        "matches": ["https://*.youtube.com/*"],
-        "js": [
-            "contentscript.js"
-        ],
-        "run_at": "document_end"
-    }],
+    "content_scripts": [
+        {
+            "matches": ["https://*.youtube.com/*"],
+            "js": ["contentscript.js"],
+            "run_at": "document_idle"
+        }
+    ],
 
-    "permissions": [
-        "storage"
-    ]
+    "permissions": ["storage"],
+
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    }
 }

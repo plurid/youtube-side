@@ -1,305 +1,319 @@
-// #region imports
-    // #region libraries
-    import React, {
-        useRef,
-        useState,
-        useEffect,
-    } from 'react';
+import { dewiki } from '@plurid/plurid-themes';
+import {
+    Dropdown,
+    InputLine,
+    InputSwitch,
+    LinkButton,
+    Slider,
+} from '@plurid/plurid-ui-components-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getActiveTab } from '~common/utilities';
+import { isSideResponse, type SideRequest, type SideStatus } from '~data/messages';
+import {
+    BLUR_MAX,
+    BLUR_MIN,
+    DEFAULT_OPTIONS,
+    INVERT_TEXT_MODES,
+    type InvertTextMode,
+    loadOptions,
+    normalizeOptions,
+    OPACITY_MAX,
+    OPACITY_MIN,
+    type Options,
+    type OptionsUpdate,
+    resetOptions,
+    subscribeOptions,
+    updateOptions,
+} from '~data/options';
 
-    import {
-        dewiki,
-    } from '@plurid/plurid-themes';
+import { inputStyle, StyledOptionRow, StyledPopup, StyledSliders } from './styled';
 
-    import {
-        InputSwitch,
-        InputLine,
-        LinkButton,
-    } from '@plurid/plurid-ui-components-react';
-    // #endregion libraries
+const SAVE_DELAY = 200;
 
-
-    // #region external
-    import {
-        Options,
-    } from '~data/interfaces';
-
-    import {
-        OPTIONS_KEY,
-        defaultOptions,
-    } from '~data/constants';
-    // #endregion external
-
-
-    // #region internal
-    import {
-        StyledPopup,
-        inputStyle,
-    } from './styled';
-    // #endregion internal
-// #region imports
-
-
-
-// #region module
-export interface PopupProperties {
-}
-
-const Popup: React.FC<PopupProperties> = (
-    _properties,
-) => {
-    // #region references
-    const mounted = useRef(false);
-    // #endregion references
-
-
-    // #region state
-    const [
-        loading,
-        setLoading,
-    ] = useState(true);
-
-    const [
-        background,
-        setBackground,
-    ] = useState(false);
-
-    const [
-        blurred,
-        setBlurred,
-    ] = useState(false);
-
-    const [
-        leftSide,
-        setLeftSide,
-    ] = useState(true);
-
-    const [
-        width,
-        setWidth,
-    ] = useState(500);
-
-    const [
-        height,
-        setHeight,
-    ] = useState(550);
-
-    const [
-        recommendations,
-        setRecommendations,
-    ] = useState(true);
-    // #endregion state
-
-
-    // #region handlers
-    const reset = () => {
-        setBackground(false);
-        setLeftSide(defaultOptions.left);
-        setWidth(defaultOptions.width);
-        setHeight(defaultOptions.height);
+const sendToActiveTab = async (request: SideRequest): Promise<SideStatus> => {
+    const tab = await getActiveTab();
+    const response: unknown = await chrome.tabs.sendMessage(tab.id as number, request);
+    if (!isSideResponse(response)) {
+        throw new Error('The active tab did not return a YouTube Side status');
     }
-    // #endregion handlers
+    return response.status;
+};
 
+const Popup = () => {
+    const [loading, setLoading] = useState(true);
+    const [options, setOptions] = useState<Options>({ ...DEFAULT_OPTIONS });
+    const [sideStatus, setSideStatus] = useState<SideStatus | undefined>(undefined);
+    const pendingUpdate = useRef<OptionsUpdate>({});
+    const saveTimer = useRef<number | undefined>(undefined);
 
-    // #region effects
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const data = await chrome.storage.local.get(OPTIONS_KEY);
-                if (!data || !data[OPTIONS_KEY]) {
-                    setLoading(false);
-                    return;
-                }
-
-                const {
-                    background,
-                    blurred,
-                    left,
-                    width,
-                    height,
-                    recommendations,
-                } = data[OPTIONS_KEY] as Options;
-
-                setBackground(background === 'opaque');
-                setBlurred(blurred);
-                setLeftSide(left);
-                setWidth(width);
-                setHeight(height);
-                setRecommendations(recommendations);
-
-                setLoading(false);
-            } catch (error) {
-                setLoading(false);
-                return;
-            }
-        }
-
-        load();
-    }, []);
-
-    useEffect(() => {
-        if (!mounted.current) {
+    const commitUpdate = useCallback(async (update: OptionsUpdate) => {
+        try {
+            const saved = await updateOptions(update);
+            setOptions(saved);
+        } catch {
             return;
         }
+    }, []);
 
-        const save = async () => {
-            try {
-                const options: Options = {
-                    background: background ? 'opaque' : 'transparent',
-                    blurred,
-                    left: leftSide,
-                    width,
-                    height,
-                    recommendations,
-                };
+    const changeOption = useCallback(
+        (update: OptionsUpdate, delayed = false) => {
+            setOptions((current) =>
+                normalizeOptions({
+                    ...current,
+                    ...update,
+                }),
+            );
 
-                await chrome.storage.local.set({
-                    [OPTIONS_KEY]: options,
-                });
-            } catch (error) {
+            if (!delayed) {
+                void commitUpdate(update);
                 return;
             }
+
+            pendingUpdate.current = {
+                ...pendingUpdate.current,
+                ...update,
+            };
+
+            if (typeof saveTimer.current === 'number') {
+                window.clearTimeout(saveTimer.current);
+            }
+
+            saveTimer.current = window.setTimeout(() => {
+                const pending = pendingUpdate.current;
+                pendingUpdate.current = {};
+                saveTimer.current = undefined;
+                void commitUpdate(pending);
+            }, SAVE_DELAY);
+        },
+        [commitUpdate],
+    );
+
+    const reset = async () => {
+        pendingUpdate.current = {};
+        if (typeof saveTimer.current === 'number') {
+            window.clearTimeout(saveTimer.current);
+            saveTimer.current = undefined;
         }
 
-        save();
-    }, [
-        background,
-        blurred,
-        leftSide,
-        width,
-        height,
-        recommendations,
-    ]);
+        try {
+            const resetValue = await resetOptions();
+            setOptions(resetValue);
+        } catch {
+            return;
+        }
+    };
+
+    const toggleSide = async () => {
+        try {
+            const status = await sendToActiveTab({
+                type: 'SET_ACTIVE',
+                active: !sideStatus?.active,
+            });
+            setSideStatus(status);
+        } catch {
+            setSideStatus(undefined);
+        }
+    };
 
     useEffect(() => {
-        mounted.current = true;
+        let mounted = true;
+
+        const readStatus = async () => {
+            try {
+                const status = await sendToActiveTab({ type: 'GET_STATE' });
+                if (mounted) {
+                    setSideStatus(status);
+                }
+            } catch {
+                return;
+            }
+        };
+
+        void readStatus();
 
         return () => {
-            mounted.current = false;
-        }
+            mounted = false;
+        };
     }, []);
-    // #endregion effects
 
+    useEffect(() => {
+        let mounted = true;
 
-    // #region render
+        const hydrate = async () => {
+            const loadedOptions = await loadOptions().catch(() => ({ ...DEFAULT_OPTIONS }));
+
+            if (!mounted) {
+                return;
+            }
+
+            setOptions(loadedOptions);
+            setLoading(false);
+        };
+
+        const unsubscribe = subscribeOptions((updatedOptions) => {
+            if (mounted) {
+                setOptions(updatedOptions);
+            }
+        });
+
+        void hydrate();
+
+        return () => {
+            mounted = false;
+            unsubscribe();
+
+            if (typeof saveTimer.current === 'number') {
+                window.clearTimeout(saveTimer.current);
+            }
+        };
+    }, []);
+
     if (loading) {
-        return (
-            <StyledPopup
-                theme={dewiki}
-            >
-            </StyledPopup>
-        );
+        return <StyledPopup theme={dewiki} />;
     }
 
-    return (
-        <StyledPopup
-            theme={dewiki}
-        >
-            <h1>
-                YouTube Side
-            </h1>
+    const background = options.background === 'opaque';
 
-            <div>
-                press alt/option (⌥) + S on a YouTube page to activate side positioning
-            </div>
+    return (
+        <StyledPopup theme={dewiki}>
+            <h1>YouTube Side</h1>
+
+            <div>press alt/option (⌥) + S on a YouTube page to activate side positioning</div>
+
+            {sideStatus?.available && (
+                <InputSwitch
+                    name="side position [⌥ + S]"
+                    checked={sideStatus.active}
+                    atChange={() => {
+                        void toggleSide();
+                    }}
+                    theme={dewiki}
+                    compact={true}
+                    style={inputStyle}
+                />
+            )}
 
             <InputSwitch
                 name="background [⌥ + B]"
                 checked={background}
                 atChange={() => {
-                    setBackground(value => !value);
+                    changeOption({
+                        background: background ? 'transparent' : 'opaque',
+                    });
                 }}
                 theme={dewiki}
-                style={{
-                    ...inputStyle,
-                }}
+                style={inputStyle}
             />
 
             {background && (
-                <InputSwitch
-                    name="blurred background"
-                    checked={blurred}
-                    atChange={() => {
-                        setBlurred(value => !value);
-                    }}
-                    theme={dewiki}
-                    style={{
-                        ...inputStyle,
-                    }}
-                />
+                <StyledSliders>
+                    <Slider
+                        name="blur"
+                        value={options.blur}
+                        atChange={(blur) => {
+                            changeOption({ blur }, true);
+                        }}
+                        min={BLUR_MIN}
+                        max={BLUR_MAX}
+                        step={1}
+                        width={238}
+                        namedValueAbove={true}
+                        valueSign="px"
+                        theme={dewiki}
+                        level={2}
+                    />
+
+                    <Slider
+                        name="opacity"
+                        value={options.opacity}
+                        atChange={(opacity) => {
+                            changeOption({ opacity }, true);
+                        }}
+                        min={OPACITY_MIN}
+                        max={OPACITY_MAX}
+                        step={1}
+                        width={238}
+                        namedValueAbove={true}
+                        valueSign="%"
+                        theme={dewiki}
+                        level={2}
+                    />
+                </StyledSliders>
             )}
+
+            <StyledOptionRow>
+                <div>invert text</div>
+                <Dropdown
+                    selectables={[...INVERT_TEXT_MODES]}
+                    selected={options.invertText}
+                    atSelect={(selection) => {
+                        changeOption({ invertText: selection as InvertTextMode });
+                    }}
+                    selectAtHover={false}
+                    theme={dewiki}
+                    level={2}
+                    width={90}
+                />
+            </StyledOptionRow>
 
             <InputSwitch
                 name="left side [⌥ + L]"
-                checked={leftSide}
+                checked={options.left}
                 atChange={() => {
-                    setLeftSide(value => !value);
+                    changeOption({ left: !options.left });
                 }}
                 theme={dewiki}
-                style={{
-                    ...inputStyle,
-                }}
+                style={inputStyle}
             />
 
             <InputLine
                 name="width"
-                text={width + ''}
+                text={String(options.width)}
                 atChange={(event) => {
-                    const value = event.target.value;
-                    const parsed = parseInt(value, 10);
-                    if (isNaN(parsed)) {
-                        return;
+                    const width = Number.parseInt(event.target.value, 10);
+                    if (Number.isFinite(width)) {
+                        changeOption({ width }, true);
                     }
-
-                    setWidth(parsed);
                 }}
                 theme={dewiki}
                 textline={{
                     type: 'number',
                 }}
-                style={{
-                    ...inputStyle,
-                }}
+                style={inputStyle}
             />
 
             <InputLine
                 name="height"
-                text={height + ''}
+                text={String(options.height)}
                 atChange={(event) => {
-                    const value = event.target.value;
-                    const parsed = parseInt(value, 10);
-                    if (isNaN(parsed)) {
-                        return;
+                    const height = Number.parseInt(event.target.value, 10);
+                    if (Number.isFinite(height)) {
+                        changeOption({ height }, true);
                     }
-
-                    setHeight(parsed);
                 }}
                 theme={dewiki}
                 textline={{
                     type: 'number',
                 }}
-                style={{
-                    ...inputStyle,
-                }}
+                style={inputStyle}
             />
 
             <InputSwitch
                 name="recommendations [⌥ + R]"
-                checked={recommendations}
+                checked={options.recommendations}
                 atChange={() => {
-                    setRecommendations(value => !value);
+                    changeOption({ recommendations: !options.recommendations });
                 }}
                 theme={dewiki}
-                style={{
-                    ...inputStyle,
-                }}
+                style={inputStyle}
             />
 
             <div>
                 <LinkButton
                     text="reset"
                     atClick={() => {
-                        reset();
+                        void reset();
                     }}
                     theme={dewiki}
                     style={{
@@ -310,12 +324,6 @@ const Popup: React.FC<PopupProperties> = (
             </div>
         </StyledPopup>
     );
-    // #endregion render
-}
-// #endregion module
+};
 
-
-
-// #region exports
 export default Popup;
-// #endregion exports

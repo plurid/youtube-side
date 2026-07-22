@@ -1,6 +1,18 @@
 allowBuilds:
   unrs-resolver: true
+minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
+  - '@plurid/plurid-ui-components-react'
+  - '@biomejs/biome@2.5.5'
+  - '@biomejs/cli-darwin-arm64@2.5.5'
+  - '@biomejs/cli-darwin-x64@2.5.5'
+  - '@biomejs/cli-linux-arm64-musl@2.5.5'
+  - '@biomejs/cli-linux-arm64@2.5.5'
+  - '@biomejs/cli-linux-x64-musl@2.5.5'
+  - '@biomejs/cli-linux-x64@2.5.5'
+  - '@biomejs/cli-win32-arm64@2.5.5'
+  - '@biomejs/cli-win32-x64@2.5.5'
+  - '@testing-library/jest-dom@7.0.0'
   - react-dom@19.2.8
   - react@19.2.8
   - ts-jest@29.4.12

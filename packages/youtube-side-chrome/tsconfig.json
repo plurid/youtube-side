@@ -1,30 +1,32 @@
 {
     "compilerOptions": {
-        "baseUrl": ".",
+        "target": "ES2024",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "lib": ["ES2024", "DOM", "DOM.Iterable"],
+        "jsx": "react-jsx",
         "paths": {
-            "~common/*": [
-                "./source/common/*"
-            ],
-            "~contentscript/*": [
-                "./source/contentscript/*"
-            ],
-            "~data/*": [
-                "./source/data/*"
-            ],
-            "~popup/*": [
-                "./source/popup/*"
-            ],
+            "~data": ["./source/data/index.ts"],
+            "~common/*": ["./source/common/*"],
+            "~contentscript/*": ["./source/contentscript/*"],
+            "~data/*": ["./source/data/*"],
+            "~popup/*": ["./source/popup/*"]
         },
-
-        "outDir": "./distribution/",
-        "sourceMap": true,
-        "noImplicitAny": true,
-        "module": "es6",
-        "target": "es5",
-        "jsx": "react",
-        "allowJs": true,
-        "allowSyntheticDefaultImports": true,
-        "moduleResolution": "node",
-        "isolatedModules": true
-    }
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "noImplicitOverride": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "useUnknownInCatchVariables": true,
+        "forceConsistentCasingInFileNames": true,
+        "isolatedModules": true,
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "noEmit": true,
+        "types": ["chrome", "node"]
+    },
+    "include": ["source/**/*.ts", "source/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"],
+    "exclude": ["coverage", "distribution", "distribution-zip", "node_modules"]
 }
