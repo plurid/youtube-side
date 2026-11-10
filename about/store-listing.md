@@ -51,7 +51,8 @@ Upload in this order from `about/images/store/` (1280×800 PNG, regenerate with 
 2. `2-transcript-search.png`: transcript search with highlighted matches
 3. `3-chapters.png`: chapters with the current one highlighted
 4. `4-notes.png`: bookmarks with labels and notes, ready to export
-5. `5-light-right.png`: light theme, panel on the right, recommendations hidden
+5. `5-theater-anchor.png`: theater mode with the panel anchored to the player
+6. `6-light-right.png`: light theme, panel on the right, recommendations hidden
 
 ## Privacy practices tab
 

@@ -33,20 +33,6 @@ const BOOKMARKS = [
 const NOTE =
     'Ax = b can be read two ways: rows are lines or planes meeting at the solution, columns are vectors combined to reach b.';
 
-// recommendations vary per visitor; only on-topic ones stay in the screenshots
-const TOPICS = {
-    [CHAPTERED_VIDEO]: [
-        '3Blue1Brown',
-        'neural',
-        'deep learning',
-        'machine learning',
-        'gradient',
-        'backpropagation',
-        'transformers?',
-    ],
-    [LECTURE_VIDEO]: ['MIT', 'OpenCourseWare', 'Strang', 'linear algebra', 'matrix', 'matrices'],
-};
-
 // ads, sponsored cards, the merch shelf, and transient player overlays
 const CLUTTER = [
     '#player-ads',
@@ -69,6 +55,37 @@ const CLUTTER = [
     '.ytp-tooltip',
 ].join(', ');
 
+const TOPICS = {
+    [CHAPTERED_VIDEO]: [
+        '3Blue1Brown',
+        'neural',
+        'deep learning',
+        'machine learning',
+        'gradient',
+        'backpropagation',
+        'transformer',
+        'LLM',
+        'math',
+        'calculus',
+        'physics',
+        'AI',
+    ],
+    [LECTURE_VIDEO]: [
+        'MIT',
+        'OpenCourseWare',
+        'Strang',
+        'linear algebra',
+        'matrix',
+        'matrices',
+        'lecture',
+        'course',
+        'math',
+        'calculus',
+        'algebra',
+        'equation',
+    ],
+};
+
 const tidy = (page, clutter, topics) =>
     page.evaluate(
         (clutter, topics) => {
@@ -78,8 +95,7 @@ const tidy = (page, clutter, topics) =>
             for (const element of document.querySelectorAll(clutter)) {
                 hide(element);
             }
-            const onTopic =
-                topics.length > 0 ? new RegExp(`\\b(?:${topics.join('|')})\\b`, 'i') : null;
+            const onTopic = topics.length > 0 ? new RegExp(`(?:${topics.join('|')})`, 'i') : null;
             for (const item of document.querySelectorAll('#related #contents > *')) {
                 const text = item.textContent ?? '';
                 if (
@@ -263,13 +279,23 @@ await mkdir(outputDirectory, { recursive: true });
 
 await scene(
     '1-side-panel.png',
-    { colorScheme: 'dark', videoId: CHAPTERED_VIDEO, seconds: 340 },
+    {
+        colorScheme: 'dark',
+        videoId: CHAPTERED_VIDEO,
+        seconds: 340,
+        options: { opacity: 62, blur: 10 },
+    },
     async () => undefined,
 );
 
 await scene(
     '2-transcript-search.png',
-    { colorScheme: 'dark', videoId: LECTURE_VIDEO, seconds: 610 },
+    {
+        colorScheme: 'dark',
+        videoId: LECTURE_VIDEO,
+        seconds: 610,
+        options: { opacity: 92, blur: 3 },
+    },
     async (page) => {
         await openTab(page, 'transcript');
         await waitFor(
@@ -285,7 +311,12 @@ await scene(
 
 await scene(
     '3-chapters.png',
-    { colorScheme: 'dark', videoId: CHAPTERED_VIDEO, seconds: 345 },
+    {
+        colorScheme: 'dark',
+        videoId: CHAPTERED_VIDEO,
+        seconds: 345,
+        options: { opacity: 90, blur: 3 },
+    },
     async (page) => {
         await openTab(page, 'chapters');
         await waitFor(
@@ -299,7 +330,12 @@ await scene(
 
 await scene(
     '4-notes.png',
-    { colorScheme: 'dark', videoId: LECTURE_VIDEO, seconds: 425 },
+    {
+        colorScheme: 'dark',
+        videoId: LECTURE_VIDEO,
+        seconds: 425,
+        options: { opacity: 94, blur: 3 },
+    },
     async (page) => {
         await openTab(page, 'notes');
         await waitFor(
@@ -312,12 +348,28 @@ await scene(
 );
 
 await scene(
-    '5-light-right.png',
+    '5-theater-anchor.png',
+    {
+        colorScheme: 'dark',
+        videoId: CHAPTERED_VIDEO,
+        seconds: 345,
+        options: { layoutAnchor: 'player', opacity: 88, blur: 3 },
+    },
+    async (page) => {
+        await page.click('#movie_player').catch(() => undefined);
+        await page.keyboard.press('t');
+        await sleep(1_500);
+        await settle(page);
+    },
+);
+
+await scene(
+    '6-light-right.png',
     {
         colorScheme: 'light',
         videoId: LECTURE_VIDEO,
         seconds: 900,
-        options: { left: false, recommendations: false },
+        options: { left: false, recommendations: false, opacity: 100, blur: 0 },
     },
     async () => undefined,
 );
