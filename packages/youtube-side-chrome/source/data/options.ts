@@ -72,7 +72,7 @@ const LEGACY_BLUR = 5;
 export const DEFAULT_OPTIONS: Readonly<Options> = Object.freeze({
     background: 'opaque',
     blur: 10,
-    opacity: 50,
+    opacity: 70,
     invertText: 'off',
     width: 500,
     height: 550,

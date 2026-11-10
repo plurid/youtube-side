@@ -137,7 +137,7 @@ The status is `{ active, available, effectiveVisible, suspendReason, context }`.
 | --- | --- | --- |
 | `background` | `opaque` | `transparent`, `opaque` |
 | `blur` | 10 | 0 to 20 px |
-| `opacity` | 50 | 0 to 100 % |
+| `opacity` | 70 | 0 to 100 % |
 | `invertText` | `off` | `off`, `auto`, `on` |
 | `width`, `height` | 500, 550 | 320 to 1200, 240 to 1200 px |
 | `left` | `true` | panel side |
