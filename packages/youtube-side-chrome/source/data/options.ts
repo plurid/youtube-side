@@ -3,6 +3,7 @@ export type LayoutAnchor = 'viewport' | 'player';
 export type AutoActivate = 'never' | 'live' | 'long' | 'always';
 export type PresetKey = 'standard' | 'live' | 'theater';
 export type StudyAutoOpen = 'off' | 'transcript' | 'chapters';
+export type ChannelRule = 'always' | 'never';
 
 export const INVERT_TEXT_MODES: readonly InvertTextMode[] = ['off', 'auto', 'on'];
 export const LAYOUT_ANCHORS: readonly LayoutAnchor[] = ['viewport', 'player'];
@@ -35,7 +36,7 @@ export interface Options {
     layoutAnchor: LayoutAnchor;
     autoActivate: AutoActivate;
     presets: Partial<Record<PresetKey, LayoutPreset>>;
-    channelRules: Record<string, 'always' | 'never'>;
+    channelRules: Record<string, ChannelRule>;
 
     // Direction A (Study Mode)
     studyEnabled: boolean;
@@ -204,12 +205,12 @@ export const normalizePresets = (value: unknown): Partial<Record<PresetKey, Layo
     return presets;
 };
 
-export const normalizeChannelRules = (value: unknown): Record<string, 'always' | 'never'> => {
+export const normalizeChannelRules = (value: unknown): Record<string, ChannelRule> => {
     if (!isRecord(value)) {
         return {};
     }
 
-    const rules: Record<string, 'always' | 'never'> = {};
+    const rules: Record<string, ChannelRule> = {};
     const entries = Object.entries(value);
     const start = Math.max(0, entries.length - MAX_CHANNEL_RULES);
     for (let index = start; index < entries.length; index += 1) {

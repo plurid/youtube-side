@@ -547,15 +547,260 @@ describe('YouTubeSideController', () => {
         await flushLayout();
         expect(controller.getState().active).toBe(false);
 
-        // Clicking native Show Transcript button activates side and opens transcript view
-        const transcriptBtn = document.createElement('button');
-        transcriptBtn.textContent = 'Show transcript';
-        document.body.append(transcriptBtn);
-        transcriptBtn.click();
+        // YouTube's transcript button never opens the panel by itself
+        document.body.insertAdjacentHTML(
+            'beforeend',
+            '<ytd-video-description-transcript-section-renderer><button>Show transcript</button></ytd-video-description-transcript-section-renderer><button id="other">transcript notes</button>',
+        );
+        const showTranscript = document.querySelector(
+            'ytd-video-description-transcript-section-renderer button',
+        ) as HTMLButtonElement;
+        showTranscript.click();
         await flushLayout();
-        expect(controller.getState().active).toBe(true);
-        transcriptBtn.remove();
+        expect(controller.getState().active).toBe(false);
+
+        // while the panel is shown, it brings YouTube's transcript into the study view
+        controller.setActive(true, true);
+        await flushLayout();
+        const below = document.getElementById('below') as HTMLElement;
+        (document.getElementById('other') as HTMLButtonElement).click();
+        expect(below.dataset.youtubeSideView).toBeUndefined();
+        showTranscript.click();
+        expect(below.dataset.youtubeSideView).toBe('transcript');
 
         controller.stop();
+    });
+
+    test('restores YouTube content when study mode is turned off in a study view', async () => {
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+
+        const below = document.getElementById('below') as HTMLElement;
+        pressShortcut('KeyT');
+        await flushLayout();
+        expect(below.dataset.youtubeSideView).toBe('transcript');
+
+        await mock.chrome.storage.local.set({
+            [OPTIONS_KEY]: {
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, studyEnabled: false },
+            },
+        });
+        await flushLayout();
+
+        expect(document.getElementById('youtube-side-study')).toBeNull();
+        expect(below.dataset.youtubeSideView).toBeUndefined();
+
+        controller.setActive(false);
+        await flushLayout();
+        expect(below.dataset.youtubeSideView).toBeUndefined();
+        controller.stop();
+    });
+
+    test('keeps the study panel across layout passes', async () => {
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+
+        const study = document.getElementById('youtube-side-study');
+        expect(study).not.toBeNull();
+
+        for (let pass = 0; pass < 3; pass += 1) {
+            window.dispatchEvent(new Event('resize'));
+            await flushLayout();
+        }
+
+        expect(document.getElementById('youtube-side-study')).toBe(study);
+        controller.stop();
+    });
+
+    test('waits for YouTube to show the current video before applying channel rules', async () => {
+        window.history.pushState({}, '', '/watch?v=chanVideo01');
+        mock.data[OPTIONS_KEY] = {
+            version: OPTIONS_VERSION,
+            values: {
+                ...DEFAULT_OPTIONS,
+                autoActivate: 'always',
+                channelRules: { '/@blocked': 'never' },
+            },
+        };
+        // the metadata still describes the previous video on another channel
+        document
+            .querySelector('ytd-app')
+            ?.insertAdjacentHTML(
+                'afterbegin',
+                '<ytd-watch-flexy video-id="prevVideo01"><ytd-watch-metadata><ytd-video-owner-renderer><a href="/@other">Other</a></ytd-video-owner-renderer></ytd-watch-metadata></ytd-watch-flexy>',
+            );
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        await flushLayout();
+        expect(controller.getState().active).toBe(false);
+
+        const flexy = document.querySelector('ytd-watch-flexy') as HTMLElement;
+        flexy.querySelector('a')?.setAttribute('href', '/@blocked');
+        flexy.setAttribute('video-id', 'chanVideo01');
+        await flushLayout();
+        expect(controller.getState().active).toBe(false);
+        expect(controller.getState().context?.channelKey).toBe('/@blocked');
+
+        await mock.sendMessageMock(7, {
+            type: 'APPLY_CHANNEL_RULE',
+            channelKey: '/@Blocked',
+            rule: null,
+        });
+        await flushLayout();
+        expect(controller.getState().active).toBe(true);
+        controller.stop();
+    });
+
+    test('activates long videos once their own duration is known', async () => {
+        window.history.pushState({}, '', '/watch?v=longVideo01');
+        mock.data[OPTIONS_KEY] = {
+            version: OPTIONS_VERSION,
+            values: { ...DEFAULT_OPTIONS, autoActivate: 'long' },
+        };
+
+        let duration = Number.NaN;
+        document
+            .querySelector('ytd-app')
+            ?.insertAdjacentHTML(
+                'afterbegin',
+                '<div id="movie_player" class="html5-video-player"></div>',
+            );
+        const player = document.getElementById('movie_player') as HTMLElement;
+        const video = document.createElement('video');
+        Object.defineProperty(video, 'duration', { configurable: true, get: () => duration });
+        player.append(video);
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        await flushLayout();
+        expect(controller.getState().active).toBe(false);
+
+        // a long pre-roll ad must not count as the video's duration
+        player.classList.add('ad-showing');
+        duration = 1_500;
+        video.dispatchEvent(new Event('durationchange'));
+        await flushLayout();
+        expect(controller.getState().active).toBe(false);
+
+        player.classList.remove('ad-showing');
+        video.dispatchEvent(new Event('durationchange'));
+        await flushLayout();
+        expect(controller.getState().active).toBe(true);
+
+        const removeListener = jest.spyOn(video, 'removeEventListener');
+        controller.stop();
+        expect(removeListener).toHaveBeenCalledWith('timeupdate', expect.any(Function));
+        expect(removeListener).toHaveBeenCalledWith('durationchange', expect.any(Function));
+    });
+
+    test('suspends in the miniplayer and reports suspension only while active', async () => {
+        const controller = new YouTubeSideController();
+        await controller.start();
+
+        const app = document.querySelector('ytd-app') as HTMLElement;
+        app.setAttribute('miniplayer-is-active', '');
+        await flushLayout();
+        await flushLayout();
+        expect(controller.getState().suspendReason).toBeNull();
+
+        controller.setActive(true);
+        await flushLayout();
+        const below = document.getElementById('below') as HTMLElement;
+        expect(below.dataset.youtubeSideSuspended).toBe('true');
+        expect(controller.getState()).toMatchObject({
+            effectiveVisible: false,
+            suspendReason: 'miniplayer',
+        });
+
+        app.removeAttribute('miniplayer-is-active');
+        await flushLayout();
+        await flushLayout();
+        expect(below.dataset.youtubeSideSuspended).toBeUndefined();
+        controller.stop();
+    });
+
+    test('accepts shortcuts from focused buttons but not from any text editor', async () => {
+        const controller = new YouTubeSideController();
+        await controller.start();
+        document.body.insertAdjacentHTML(
+            'beforeend',
+            '<button id="tab">tab</button><div id="editor" contenteditable=""></div><div id="plain" contenteditable="plaintext-only"></div>',
+        );
+
+        pressShortcut('KeyS', document.getElementById('editor') as HTMLElement);
+        pressShortcut('KeyS', document.getElementById('plain') as HTMLElement);
+        expect(controller.getState().active).toBe(false);
+
+        pressShortcut('KeyS', document.getElementById('tab') as HTMLElement);
+        expect(controller.getState().active).toBe(true);
+        controller.stop();
+    });
+
+    test('a player-anchored panel follows page scroll and respects explicit sizes', async () => {
+        mock.data[OPTIONS_KEY] = {
+            version: OPTIONS_VERSION,
+            values: { ...DEFAULT_OPTIONS, layoutAnchor: 'player' },
+        };
+
+        let playerTop = 120;
+        document
+            .querySelector('ytd-app')
+            ?.insertAdjacentHTML(
+                'afterbegin',
+                '<div id="movie_player" class="html5-video-player"></div>',
+            );
+        (document.getElementById('movie_player') as HTMLElement).getBoundingClientRect = () =>
+            ({
+                top: playerTop,
+                left: 100,
+                right: 900,
+                bottom: playerTop + 480,
+                width: 800,
+                height: 480,
+            }) as DOMRect;
+        const below = document.getElementById('below') as HTMLElement;
+        below.getBoundingClientRect = () =>
+            ({ top: 56, left: 0, right: 500, bottom: 606, width: 500, height: 550 }) as DOMRect;
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+        expect(below.style.getPropertyValue('--youtube-side-offset-y')).toBe('64px');
+        expect(below.style.getPropertyValue('--youtube-side-height')).toBe('480px');
+
+        playerTop = 20;
+        window.dispatchEvent(new Event('scroll'));
+        await flushLayout();
+        expect(below.style.getPropertyValue('--youtube-side-offset-y')).toBe('0px');
+
+        // a size chosen in the popup beats the player-derived height
+        await mock.chrome.storage.local.set({
+            [OPTIONS_KEY]: {
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, layoutAnchor: 'player', height: 700 },
+            },
+        });
+        await flushLayout();
+        expect(below.style.getPropertyValue('--youtube-side-height')).toBe('700px');
+        controller.stop();
+    });
+
+    test('does not finish starting when stopped while options load', async () => {
+        const controller = new YouTubeSideController();
+        const starting = controller.start();
+        controller.stop();
+        await starting;
+        await flushLayout();
+
+        controller.setActive(true);
+        await flushLayout();
+        expect(document.getElementById('youtube-side-study')).toBeNull();
     });
 });

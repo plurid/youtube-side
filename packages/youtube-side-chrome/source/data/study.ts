@@ -69,9 +69,15 @@ export const normalizeVideoStudy = (value: unknown): VideoStudy => {
 
     const rawBookmarks = Array.isArray(value.bookmarks) ? value.bookmarks : [];
     const bookmarks: Bookmark[] = [];
+    // createdAt identifies a bookmark for edits and deletes, so it must be unique per video
+    const usedIds = new Set<number>();
     for (const item of rawBookmarks) {
         const normalized = normalizeBookmark(item);
         if (normalized) {
+            while (usedIds.has(normalized.createdAt)) {
+                normalized.createdAt += 1;
+            }
+            usedIds.add(normalized.createdAt);
             bookmarks.push(normalized);
             if (bookmarks.length >= MAX_BOOKMARKS_PER_VIDEO) {
                 break;
@@ -139,6 +145,16 @@ export const formatTimestamp = (timeMs: number): string => {
     return `${minutes}:${pad(seconds)}`;
 };
 
+const timestampUrl = (url: string, seconds: number): string => {
+    try {
+        const parsed = new URL(url);
+        parsed.searchParams.set('t', `${seconds}s`);
+        return parsed.toString();
+    } catch {
+        return url.includes('?') ? `${url}&t=${seconds}s` : `${url}?t=${seconds}s`;
+    }
+};
+
 export const exportStudyMarkdown = (videoTitle: string, url: string, study: VideoStudy): string => {
     const lines: string[] = [`# ${videoTitle || 'YouTube Video'} — ${url}`, ''];
 
@@ -149,7 +165,7 @@ export const exportStudyMarkdown = (videoTitle: string, url: string, study: Vide
         for (const bm of study.bookmarks) {
             const timeTag = formatTimestamp(bm.timeMs);
             const seconds = Math.floor(bm.timeMs / 1000);
-            const cleanUrl = url.includes('?') ? `${url}&t=${seconds}s` : `${url}?t=${seconds}s`;
+            const cleanUrl = timestampUrl(url, seconds);
             const labelPart = bm.label ? ` ${bm.label}` : '';
             const notePart = bm.note ? ` — ${bm.note}` : '';
             lines.push(`- [${timeTag}](${cleanUrl})${labelPart}${notePart}`);

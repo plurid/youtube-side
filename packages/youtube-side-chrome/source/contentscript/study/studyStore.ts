@@ -7,21 +7,24 @@ import {
     type VideoStudy,
 } from '~data/study';
 
+export type BookmarkUpdate = Partial<Pick<Bookmark, 'label' | 'note'>>;
+
+const emptyVideoStudy = (): VideoStudy => ({ bookmarks: [], note: '', updatedAt: Date.now() });
+
 let writeQueue: Promise<void> = Promise.resolve();
 
+/**
+ * Serializes read-modify-write cycles. A failed storage write rejects the
+ * caller's promise so the UI can report it; the queue itself keeps going.
+ */
 const enqueueStudyWrite = (
     resolveData: () => Promise<StudyData> | StudyData,
 ): Promise<StudyData> => {
     const result = writeQueue.then(async () => {
-        const nextData = await resolveData();
-        const normalized = normalizeStudyData(nextData);
-        try {
-            await chrome.storage.local.set({
-                [STUDY_STORAGE_KEY]: normalized,
-            });
-        } catch {
-            // Keep going with normalized in-memory even if write fails
-        }
+        const normalized = normalizeStudyData(await resolveData());
+        await chrome.storage.local.set({
+            [STUDY_STORAGE_KEY]: normalized,
+        });
         return normalized;
     });
 
@@ -32,6 +35,9 @@ const enqueueStudyWrite = (
 
     return result;
 };
+
+/** Resolves once every write queued so far has finished, successfully or not. */
+export const whenStudyWritesSettled = (): Promise<void> => writeQueue;
 
 export const loadStudyData = async (): Promise<StudyData> => {
     try {
@@ -44,7 +50,7 @@ export const loadStudyData = async (): Promise<StudyData> => {
 
 export const loadVideoStudy = async (videoId: string): Promise<VideoStudy> => {
     const data = await loadStudyData();
-    return data.videos[videoId] ?? { bookmarks: [], note: '', updatedAt: Date.now() };
+    return data.videos[videoId] ?? emptyVideoStudy();
 };
 
 export const saveVideoStudy = async (
@@ -53,13 +59,10 @@ export const saveVideoStudy = async (
 ): Promise<VideoStudy> => {
     const nextData = await enqueueStudyWrite(async () => {
         const currentData = await loadStudyData();
-        const currentStudy = currentData.videos[videoId] ?? {
-            bookmarks: [],
-            note: '',
+        const updatedStudy = {
+            ...update(currentData.videos[videoId] ?? emptyVideoStudy()),
             updatedAt: Date.now(),
         };
-        const updatedStudy = update(currentStudy);
-        updatedStudy.updatedAt = Date.now();
 
         return {
             ...currentData,
@@ -70,65 +73,50 @@ export const saveVideoStudy = async (
         };
     });
 
-    return nextData.videos[videoId] ?? { bookmarks: [], note: '', updatedAt: Date.now() };
+    return nextData.videos[videoId] ?? emptyVideoStudy();
 };
 
-export const addBookmark = async (
+export const addBookmark = (
     videoId: string,
     timeMs: number,
     label = '',
     note = '',
-): Promise<VideoStudy> => {
-    return saveVideoStudy(videoId, (study) => {
-        const newBookmark: Bookmark = {
-            timeMs,
-            label,
-            note,
-            createdAt: Date.now(),
-        };
-        const nextBookmarks = [...study.bookmarks, newBookmark].sort((a, b) => a.timeMs - b.timeMs);
+): Promise<VideoStudy> =>
+    saveVideoStudy(videoId, (study) => {
+        const usedIds = new Set(study.bookmarks.map((bookmark) => bookmark.createdAt));
+        let createdAt = Date.now();
+        while (usedIds.has(createdAt)) {
+            createdAt += 1;
+        }
+
         return {
             ...study,
-            bookmarks: nextBookmarks,
+            bookmarks: [...study.bookmarks, { timeMs, label, note, createdAt }].sort(
+                (a, b) => a.timeMs - b.timeMs,
+            ),
         };
     });
-};
 
-export const removeBookmark = async (videoId: string, index: number): Promise<VideoStudy> => {
-    return saveVideoStudy(videoId, (study) => {
-        const nextBookmarks = study.bookmarks.filter((_, i) => i !== index);
-        return {
-            ...study,
-            bookmarks: nextBookmarks,
-        };
-    });
-};
+export const removeBookmark = (videoId: string, bookmarkId: number): Promise<VideoStudy> =>
+    saveVideoStudy(videoId, (study) => ({
+        ...study,
+        bookmarks: study.bookmarks.filter((bookmark) => bookmark.createdAt !== bookmarkId),
+    }));
 
-export const updateBookmark = async (
+export const updateBookmark = (
     videoId: string,
-    index: number,
-    update: Partial<Bookmark>,
-): Promise<VideoStudy> => {
-    return saveVideoStudy(videoId, (study) => {
-        const nextBookmarks = study.bookmarks.map((bm, i) => {
-            if (i !== index) {
-                return bm;
-            }
-            return {
-                ...bm,
-                ...update,
-            };
-        });
-        return {
-            ...study,
-            bookmarks: nextBookmarks,
-        };
-    });
-};
+    bookmarkId: number,
+    update: BookmarkUpdate,
+): Promise<VideoStudy> =>
+    saveVideoStudy(videoId, (study) => ({
+        ...study,
+        bookmarks: study.bookmarks.map((bookmark) =>
+            bookmark.createdAt === bookmarkId ? { ...bookmark, ...update } : bookmark,
+        ),
+    }));
 
-export const setVideoNote = async (videoId: string, note: string): Promise<VideoStudy> => {
-    return saveVideoStudy(videoId, (study) => ({
+export const setVideoNote = (videoId: string, note: string): Promise<VideoStudy> =>
+    saveVideoStudy(videoId, (study) => ({
         ...study,
         note,
     }));
-};

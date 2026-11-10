@@ -61,6 +61,17 @@ describe('study data normalization and export', () => {
             expect(result.bookmarks.length).toBe(MAX_BOOKMARKS_PER_VIDEO);
         });
 
+        it('makes duplicate bookmark ids unique', () => {
+            const result = normalizeVideoStudy({
+                bookmarks: [
+                    { timeMs: 1, createdAt: 5 },
+                    { timeMs: 2, createdAt: 5 },
+                    { timeMs: 3, createdAt: 6 },
+                ],
+            });
+            expect(result.bookmarks.map((bookmark) => bookmark.createdAt)).toEqual([5, 6, 7]);
+        });
+
         it('truncates video note to MAX_VIDEO_NOTE_LENGTH', () => {
             const longNote = 'x'.repeat(MAX_VIDEO_NOTE_LENGTH + 500);
             const result = normalizeVideoStudy({ note: longNote });
@@ -128,6 +139,23 @@ describe('study data normalization and export', () => {
             expect(md).toContain('[12:34](https://www.youtube.com/watch?v=123&t=754s)');
             expect(md).toContain('Key takeaway — Remember this');
             expect(md).toContain('General video thoughts.');
+        });
+
+        it('replaces an existing start time and handles empty studies', () => {
+            const study: VideoStudy = {
+                bookmarks: [{ timeMs: 61_500, label: '', note: '', createdAt: 1 }],
+                note: '',
+                updatedAt: 1,
+            };
+
+            const md = exportStudyMarkdown('', 'https://www.youtube.com/watch?v=abc&t=10s', study);
+            expect(md).toContain('# YouTube Video');
+            expect(md).toContain('[1:01](https://www.youtube.com/watch?v=abc&t=61s)');
+            expect(md).toContain('_(No notes)_');
+            expect(exportStudyMarkdown('T', 'not a url', study)).toContain('(not a url?t=61s)');
+            expect(exportStudyMarkdown('T', 'x', { ...study, bookmarks: [] })).toContain(
+                '_(No bookmarks)_',
+            );
         });
     });
 });

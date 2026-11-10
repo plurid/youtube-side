@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import {
     addBookmark,
@@ -8,6 +8,7 @@ import {
     saveVideoStudy,
     setVideoNote,
     updateBookmark,
+    whenStudyWritesSettled,
 } from '~contentscript/study/studyStore';
 import { STUDY_DATA_VERSION, STUDY_STORAGE_KEY } from '~data/study';
 import { createChromeMock } from './chrome';
@@ -73,16 +74,28 @@ describe('studyStore module', () => {
         expect(study.bookmarks[0]?.timeMs).toBe(2000);
         expect(study.bookmarks[1]?.timeMs).toBe(10000);
 
-        // Update bookmark
-        await updateBookmark(videoId, 1, { label: 'Updated ten' });
+        // bookmarks are addressed by id, so sorting cannot redirect an edit
+        const [twoSeconds, tenSeconds] = study.bookmarks;
+        expect(twoSeconds?.createdAt).not.toBe(tenSeconds?.createdAt);
+
+        await updateBookmark(videoId, tenSeconds?.createdAt ?? -1, { label: 'Updated ten' });
         study = await loadVideoStudy(videoId);
         expect(study.bookmarks[1]?.label).toBe('Updated ten');
 
-        // Remove bookmark
-        await removeBookmark(videoId, 0);
+        await removeBookmark(videoId, twoSeconds?.createdAt ?? -1);
         study = await loadVideoStudy(videoId);
         expect(study.bookmarks).toHaveLength(1);
         expect(study.bookmarks[0]?.timeMs).toBe(10000);
+    });
+
+    it('keeps bookmark ids unique when captured in the same millisecond', async () => {
+        const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+        await addBookmark('same_ms', 1000);
+        await addBookmark('same_ms', 2000);
+        now.mockRestore();
+
+        const study = await loadVideoStudy('same_ms');
+        expect(new Set(study.bookmarks.map((bookmark) => bookmark.createdAt)).size).toBe(2);
     });
 
     it('saves and updates video note', async () => {
@@ -94,22 +107,26 @@ describe('studyStore module', () => {
         expect(study.note).toBe('Comprehensive notes.');
     });
 
-    it('survives storage write failure gracefully', async () => {
+    it('reports failed writes and keeps the queue working', async () => {
         const mock = createChromeMock();
         mock.setMock.mockRejectedValueOnce(new Error('Storage quota exceeded'));
 
-        const study = await saveVideoStudy('vid_err', (current) => ({
-            ...current,
-            note: 'In-memory value',
-        }));
-        expect(study.note).toBe('In-memory value');
+        await expect(
+            saveVideoStudy('vid_err', (current) => ({
+                ...current,
+                note: 'Lost value',
+            })),
+        ).rejects.toThrow('Storage quota exceeded');
 
-        // Test rejecting resolver to exercise write queue rejection handler
         await expect(
             saveVideoStudy('vid_throw', () => {
                 throw new Error('Resolver error');
             }),
         ).rejects.toThrow('Resolver error');
+
+        await setVideoNote('vid_err', 'Saved later');
+        await whenStudyWritesSettled();
+        expect((await loadVideoStudy('vid_err')).note).toBe('Saved later');
     });
 
     it('returns default study data when storage read rejects', async () => {

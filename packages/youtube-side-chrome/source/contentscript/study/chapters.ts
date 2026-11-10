@@ -3,7 +3,20 @@ export interface Chapter {
     title: string;
 }
 
-const TIMESTAMP_LINE_REGEX = /^\s*(?:(\d+):)?([0-5]?\d):([0-5]\d)\s*[-•–—]?\s*(.+)$/i;
+// YouTube renders each chapter up to three times (description cards, the
+// chapters panel, the structured description); the panel copy is preferred
+const MARKER_SELECTOR = 'ytd-macro-markers-list-item-renderer';
+const CHAPTERS_PANEL_SELECTOR = '[target-id="engagement-panel-macro-markers-description-chapters"]';
+const MARKER_TIME_SELECTOR = '#time';
+const MARKER_TITLE_SELECTOR = 'h3.macro-markers, #details h3:not([hidden]), #details h4, #title';
+const DESCRIPTION_SELECTORS = [
+    '#description-inline-expander',
+    '#description',
+    'ytd-text-inline-expander',
+] as const;
+
+const TIMESTAMP_LINE_REGEX = /^\s*(?:(\d+):)?([0-5]?\d):([0-5]\d)\s*[-•–—]?\s*(.+)$/;
+const CLOCK_REGEX = /(?:(\d+):)?([0-5]?\d):([0-5]\d)/;
 
 export const parseTimestampToMs = (
     hours: string | undefined,
@@ -16,46 +29,16 @@ export const parseTimestampToMs = (
     return (h * 3600 + m * 60 + s) * 1000;
 };
 
-export const parseDescriptionChapters = (text: string): Chapter[] | null => {
-    if (!text || typeof text !== 'string') {
-        return null;
-    }
-
-    const lines = text.split('\n');
-    const chapters: Chapter[] = [];
-
-    for (const rawLine of lines) {
-        const line = rawLine.trim();
-        if (!line) {
-            continue;
-        }
-
-        const match = TIMESTAMP_LINE_REGEX.exec(line);
-        if (!match) {
-            continue;
-        }
-
-        const [, h, m, s, title] = match;
-        if (!m || !s || !title) {
-            continue;
-        }
-
-        const startMs = parseTimestampToMs(h, m, s);
-        const cleanTitle = title.trim();
-        if (cleanTitle.length > 0) {
-            chapters.push({ startMs, title: cleanTitle });
-        }
-    }
-
-    // Must have at least 2 chapters and strictly increasing startMs
+/** At least two chapters with strictly increasing start times, or null. */
+const toChapterList = (chapters: Chapter[]): Chapter[] | null => {
     if (chapters.length < 2) {
         return null;
     }
 
-    for (let i = 1; i < chapters.length; i++) {
-        const prev = chapters[i - 1];
-        const curr = chapters[i];
-        if (prev && curr && curr.startMs <= prev.startMs) {
+    for (let index = 1; index < chapters.length; index += 1) {
+        const previous = chapters[index - 1];
+        const current = chapters[index];
+        if (previous && current && current.startMs <= previous.startMs) {
             return null;
         }
     }
@@ -63,45 +46,67 @@ export const parseDescriptionChapters = (text: string): Chapter[] | null => {
     return chapters;
 };
 
-export const extractChaptersFromDOM = (root: Document = document): Chapter[] | null => {
-    // Source 1: YouTube's macro markers DOM
-    const markerElements = root.querySelectorAll(
-        'ytd-macro-markers-list-item-renderer, ytd-chapter-renderer',
-    );
-    if (markerElements.length >= 2) {
-        const chapters: Chapter[] = [];
-        for (const el of markerElements) {
-            const timeEl = el.querySelector('#time, .ytp-time-current, [id*="time"]');
-            const titleEl = el.querySelector('#details h4, #title, [id*="title"]');
+export const parseDescriptionChapters = (text: string): Chapter[] | null => {
+    if (!text || typeof text !== 'string') {
+        return null;
+    }
 
-            const timeText = timeEl?.textContent?.trim() || '';
-            const title = titleEl?.textContent?.trim() || '';
-
-            const match = /(?:(\d+):)?([0-5]?\d):([0-5]\d)/.exec(timeText);
-            if (match && title) {
-                const [, h, m, s] = match;
-                if (m && s) {
-                    chapters.push({
-                        startMs: parseTimestampToMs(h, m, s),
-                        title,
-                    });
-                }
-            }
-        }
-
-        if (chapters.length >= 2) {
-            return chapters;
+    const chapters: Chapter[] = [];
+    for (const rawLine of text.split('\n')) {
+        const match = TIMESTAMP_LINE_REGEX.exec(rawLine.trim());
+        const [, h, m, s, title] = match ?? [];
+        const cleanTitle = title?.trim();
+        if (m && s && cleanTitle) {
+            chapters.push({ startMs: parseTimestampToMs(h, m, s), title: cleanTitle });
         }
     }
 
-    // Source 2: YouTube description container text or timestamp anchors
-    const descriptionContainer =
-        root.querySelector('#description-inline-expander') ||
-        root.querySelector('#description') ||
-        root.querySelector('ytd-text-inline-expander');
+    return toChapterList(chapters);
+};
 
-    if (descriptionContainer?.textContent) {
-        const parsed = parseDescriptionChapters(descriptionContainer.textContent);
+const readMarker = (marker: Element): Chapter | null => {
+    const timeText = marker.querySelector(MARKER_TIME_SELECTOR)?.textContent?.trim() ?? '';
+    const titleNode = marker.querySelector(MARKER_TITLE_SELECTOR);
+    const title = (titleNode?.getAttribute('title') || titleNode?.textContent || '').trim();
+
+    const [, h, m, s] = CLOCK_REGEX.exec(timeText) ?? [];
+    if (!m || !s || !title) {
+        return null;
+    }
+
+    return { startMs: parseTimestampToMs(h, m, s), title };
+};
+
+const markersToChapters = (markers: Element[]): Chapter[] | null => {
+    const byStart = new Map<number, Chapter>();
+    for (const marker of markers) {
+        const chapter = readMarker(marker);
+        if (chapter && !byStart.has(chapter.startMs)) {
+            byStart.set(chapter.startMs, chapter);
+        }
+    }
+
+    return toChapterList([...byStart.values()].sort((a, b) => a.startMs - b.startMs));
+};
+
+/**
+ * Callers must only use this once the page shows the current video (see
+ * `isPageDataCurrent`); right after navigation the markers are stale.
+ */
+export const extractChaptersFromDOM = (root: Document = document): Chapter[] | null => {
+    const markers = [...root.querySelectorAll(MARKER_SELECTOR)];
+    const panelMarkers = markers.filter((marker) => marker.closest(CHAPTERS_PANEL_SELECTOR));
+
+    const fromMarkers =
+        (panelMarkers.length > 0 ? markersToChapters(panelMarkers) : null) ??
+        markersToChapters(markers);
+    if (fromMarkers) {
+        return fromMarkers;
+    }
+
+    for (const selector of DESCRIPTION_SELECTORS) {
+        const text = root.querySelector(selector)?.textContent;
+        const parsed = text ? parseDescriptionChapters(text) : null;
         if (parsed) {
             return parsed;
         }

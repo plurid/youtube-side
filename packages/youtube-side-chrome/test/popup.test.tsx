@@ -304,6 +304,49 @@ describe('Popup', () => {
         });
     });
 
+    test('lets the page store channel rules when it answers', async () => {
+        const mock = createChromeMock({
+            [OPTIONS_KEY]: {
+                version: OPTIONS_VERSION,
+                values: DEFAULT_OPTIONS,
+            },
+        });
+        const status = {
+            active: false,
+            available: true,
+            context: {
+                videoId: 'abcdefgh123',
+                channelKey: '/@sample',
+                mode: 'default',
+                kind: 'standard',
+                durationSeconds: 100,
+                playerRect: null,
+            },
+        };
+        mock.sendMessageMock
+            .mockResolvedValueOnce({ ok: true, status })
+            .mockResolvedValueOnce({ ok: true, status: { ...status, active: true } });
+
+        render(<Popup />);
+
+        const channelRule = await screen.findByLabelText('channel rule');
+        fireEvent.change(channelRule, { target: { value: 'always' } });
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: 'side position [⌥ + S]' })).toHaveAttribute(
+                'aria-pressed',
+                'true',
+            );
+        });
+        expect(channelRule).toHaveValue('always');
+        expect(mock.sendMessageMock).toHaveBeenLastCalledWith(7, {
+            type: 'APPLY_CHANNEL_RULE',
+            channelKey: '/@sample',
+            rule: 'always',
+        });
+        expect(mock.setMock).not.toHaveBeenCalled();
+    });
+
     test('hides the side toggle when no YouTube tab answers', async () => {
         createChromeMock({
             [OPTIONS_KEY]: {

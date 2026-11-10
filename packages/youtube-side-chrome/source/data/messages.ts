@@ -1,17 +1,18 @@
-import type { PlayerContext } from '~contentscript/player';
+import type { PlayerContext, SuspendReason } from './context';
+import type { ChannelRule } from './options';
 
 export interface SideStatus {
     active: boolean;
     available: boolean;
     effectiveVisible?: boolean;
-    suspendReason?: 'fullscreen' | 'miniplayer' | null;
+    suspendReason?: SuspendReason | null;
     context?: PlayerContext;
 }
 
 export type SideRequest =
     | { type: 'GET_STATE' }
     | { type: 'SET_ACTIVE'; active: boolean }
-    | { type: 'APPLY_CHANNEL_RULE'; channelKey: string; rule: 'always' | 'never' | null };
+    | { type: 'APPLY_CHANNEL_RULE'; channelKey: string; rule: ChannelRule | null };
 
 export interface SideResponse {
     ok: true;
@@ -41,6 +42,7 @@ export const isSideRequest = (value: unknown): value is SideRequest => {
     if (request.type === 'APPLY_CHANNEL_RULE') {
         return (
             typeof request.channelKey === 'string' &&
+            request.channelKey.trim().length > 0 &&
             (request.rule === 'always' || request.rule === 'never' || request.rule === null)
         );
     }

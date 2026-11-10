@@ -78,6 +78,45 @@ Here is the outline of the talk:
             expect(result?.[1]?.startMs).toBe(150_000);
         });
 
+        it('reads current YouTube markers once, preferring the chapters panel', () => {
+            // recorded markup: the title sits in h3.macro-markers, and each chapter is
+            // rendered in the description cards, the chapters panel, and key moments
+            const marker = (time: string, title: string) => `
+                <ytd-macro-markers-list-item-renderer>
+                    <a id="endpoint"><div id="details">
+                        <h3 class="macro-markers" title="${title}">${title}</h3>
+                        <h3 class="problem-walkthroughs" hidden title="${title}">${title}</h3>
+                        <div id="time">${time}</div>
+                    </div></a>
+                </ytd-macro-markers-list-item-renderer>`;
+
+            document.body.innerHTML = `
+                <div id="items">${marker('1:07', 'Card copy')}${marker('0:00', 'Intro')}</div>
+                <ytd-engagement-panel-section-list-renderer target-id="engagement-panel-macro-markers-description-chapters">
+                    ${marker('0:00', 'Intro')}${marker('1:07', 'Layers')}${marker('1:07', 'Duplicate')}${marker('2:42', 'Weights')}
+                </ytd-engagement-panel-section-list-renderer>
+                <ytd-engagement-panel-section-list-renderer target-id="engagement-panel-macro-markers-auto-chapters">
+                    ${marker('0:30', 'Key moment')}
+                </ytd-engagement-panel-section-list-renderer>`;
+
+            expect(extractChaptersFromDOM(document)).toEqual([
+                { startMs: 0, title: 'Intro' },
+                { startMs: 67_000, title: 'Layers' },
+                { startMs: 162_000, title: 'Weights' },
+            ]);
+        });
+
+        it('falls back to all markers, then the description', () => {
+            document.body.innerHTML = `
+                <ytd-macro-markers-list-item-renderer><div id="time">2:00</div><div id="details"><h4>B</h4></div></ytd-macro-markers-list-item-renderer>
+                <ytd-macro-markers-list-item-renderer><div id="time">0:10</div><div id="details"><h4>A</h4></div></ytd-macro-markers-list-item-renderer>
+                <ytd-macro-markers-list-item-renderer><div id="time">no time</div><div id="details"><h4>C</h4></div></ytd-macro-markers-list-item-renderer>`;
+            expect(extractChaptersFromDOM(document)?.map((chapter) => chapter.title)).toEqual([
+                'A',
+                'B',
+            ]);
+        });
+
         it('falls back to description text in DOM', () => {
             const desc = document.createElement('div');
             desc.id = 'description';

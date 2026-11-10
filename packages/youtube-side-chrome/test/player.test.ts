@@ -303,28 +303,68 @@ describe('player & layout module', () => {
     describe('derivePlayerContext', () => {
         afterEach(() => {
             document.body.innerHTML = '';
+            window.history.pushState({}, '', '/');
         });
 
-        it('derives context from DOM nodes and document properties', () => {
-            const flexy = document.createElement('ytd-watch-flexy');
-            flexy.setAttribute('theater', '');
-            document.body.append(flexy);
-
-            const channelOwner = document.createElement('ytd-video-owner-renderer');
-            const link = document.createElement('a');
-            link.href = 'https://www.youtube.com/@techchannel/';
-            channelOwner.append(link);
-            document.body.append(channelOwner);
-
+        const addVideo = (duration: number, parent: Element = document.body) => {
             const video = document.createElement('video');
-            Object.defineProperty(video, 'duration', { value: 360 });
-            document.body.append(video);
+            Object.defineProperty(video, 'duration', { value: duration });
+            parent.append(video);
+            return video;
+        };
+
+        it('derives context from DOM nodes and document properties', () => {
+            window.history.pushState({}, '', '/watch?v=abcdefgh123');
+            document.body.innerHTML = `
+                <ytd-watch-flexy theater video-id="abcdefgh123"></ytd-watch-flexy>
+                <ytd-watch-metadata>
+                    <ytd-video-owner-renderer><a href="https://www.youtube.com/@TechChannel/">Tech</a></ytd-video-owner-renderer>
+                </ytd-watch-metadata>`;
+            addVideo(360);
 
             const context = derivePlayerContext(document);
+            expect(context.videoId).toBe('abcdefgh123');
             expect(context.mode).toBe('theater');
             expect(context.channelKey).toBe('/@techchannel');
             expect(context.kind).toBe('standard');
             expect(context.durationSeconds).toBe(360);
+        });
+
+        it('reads no channel until YouTube shows the current video', () => {
+            // right after navigation the owner link still belongs to the previous video
+            window.history.pushState({}, '', '/watch?v=newVideo123');
+            document.body.innerHTML = `
+                <ytd-watch-flexy video-id="oldVideo123"></ytd-watch-flexy>
+                <ytd-watch-metadata>
+                    <ytd-video-owner-renderer><a href="/@previous">Previous</a></ytd-video-owner-renderer>
+                </ytd-watch-metadata>`;
+
+            expect(derivePlayerContext(document).channelKey).toBeNull();
+        });
+
+        it('ignores video ids off the watch page', () => {
+            window.history.pushState({}, '', '/results?v=abcdefgh123');
+            expect(derivePlayerContext(document).videoId).toBeNull();
+        });
+
+        it('treats unknown, ad, and live-in-sidebar durations correctly', () => {
+            addVideo(Number.NaN);
+            expect(derivePlayerContext(document).kind).toBe('unknown');
+
+            // a live badge in the related list says nothing about this video
+            document.body.innerHTML =
+                '<ytd-watch-next-secondary-results-renderer><div class="badge-style-type-live-now"></div></ytd-watch-next-secondary-results-renderer>';
+            addVideo(600);
+            expect(derivePlayerContext(document).kind).toBe('standard');
+
+            // pre-roll ads play in the main video element with their own duration
+            document.body.innerHTML =
+                '<div id="movie_player" class="html5-video-player ad-showing"></div>';
+            addVideo(15, document.getElementById('movie_player') as HTMLElement);
+            expect(derivePlayerContext(document)).toMatchObject({
+                kind: 'unknown',
+                durationSeconds: null,
+            });
         });
 
         it('detects live streams via infinite duration or badge', () => {
@@ -348,36 +388,46 @@ describe('player & layout module', () => {
             });
         });
 
-        it('detects miniplayer mode, premiere badge, and player rect', () => {
-            const flexy = document.createElement('ytd-watch-flexy');
-            flexy.setAttribute('miniplayer', '');
-            document.body.append(flexy);
-
-            const video = document.createElement('video');
-            Object.defineProperty(video, 'duration', { value: 0 });
-            document.body.append(video);
-
-            const premiereBadge = document.createElement('div');
-            premiereBadge.className = 'ytp-premiere-badge';
-            document.body.append(premiereBadge);
-
-            const player = document.createElement('div');
-            player.id = 'player';
-            player.getBoundingClientRect = () =>
-                ({
-                    top: 56,
-                    left: 200,
-                    right: 1000,
-                    bottom: 556,
-                    width: 800,
-                    height: 500,
-                }) as DOMRect;
-            document.body.append(player);
+        it('detects the miniplayer from the app shell and premieres from the player', () => {
+            document.body.innerHTML = `
+                <ytd-app miniplayer-is-active>
+                    <ytd-watch-flexy theater hidden></ytd-watch-flexy>
+                    <div id="movie_player" class="html5-video-player"><div class="ytp-premiere-badge"></div></div>
+                </ytd-app>`;
+            addVideo(0, document.getElementById('movie_player') as HTMLElement);
 
             const context = derivePlayerContext(document);
             expect(context.mode).toBe('miniplayer');
             expect(context.kind).toBe('premiere');
-            expect(context.playerRect?.width).toBe(800);
+        });
+
+        it('measures the movie player wherever theater mode moved it', () => {
+            const rect = (width: number, height: number) => () =>
+                ({ top: 56, left: 0, right: width, bottom: 56 + height, width, height }) as DOMRect;
+
+            document.body.innerHTML = `
+                <ytd-watch-flexy theater><div id="player"></div></ytd-watch-flexy>
+                <div id="full-bleed-container"><div id="movie_player"></div></div>`;
+            // the regular slot collapses to 0x0 once the player moves to the theater container
+            (document.getElementById('player') as HTMLElement).getBoundingClientRect = rect(0, 0);
+            (document.getElementById('movie_player') as HTMLElement).getBoundingClientRect = rect(
+                1600,
+                831,
+            );
+            expect(derivePlayerContext(document).playerRect?.height).toBe(831);
+
+            (document.getElementById('movie_player') as HTMLElement).getBoundingClientRect = rect(
+                0,
+                0,
+            );
+            (document.getElementById('player') as HTMLElement).getBoundingClientRect = rect(
+                800,
+                500,
+            );
+            expect(derivePlayerContext(document).playerRect?.width).toBe(800);
+
+            (document.getElementById('player') as HTMLElement).getBoundingClientRect = rect(0, 0);
+            expect(derivePlayerContext(document).playerRect).toBeNull();
         });
     });
 });

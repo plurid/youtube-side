@@ -28,6 +28,13 @@ describe('Messages module', () => {
                 rule: 'invalid',
             }),
         ).toBe(false);
+        expect(
+            isSideRequest({
+                type: 'APPLY_CHANNEL_RULE',
+                channelKey: '   ',
+                rule: 'always',
+            }),
+        ).toBe(false);
         expect(isSideRequest({ type: 'OTHER' })).toBe(false);
         expect(isSideRequest('GET_STATE')).toBe(false);
         expect(isSideRequest(null)).toBe(false);

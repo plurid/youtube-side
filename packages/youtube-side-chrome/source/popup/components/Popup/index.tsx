@@ -15,6 +15,7 @@ import {
     type AutoActivate,
     BLUR_MAX,
     BLUR_MIN,
+    type ChannelRule,
     DEFAULT_OPTIONS,
     INVERT_TEXT_MODES,
     type InvertTextMode,
@@ -129,24 +130,26 @@ const Popup = () => {
         }
     };
 
-    const applyChannelRule = async (channelKey: string, rule: 'always' | 'never' | null) => {
-        const nextRules = { ...options.channelRules };
-        if (rule === null) {
-            delete nextRules[channelKey];
-        } else {
-            nextRules[channelKey] = rule;
+    const applyChannelRule = async (channelKey: string, rule: ChannelRule | null) => {
+        const channelRules = { ...options.channelRules };
+        delete channelRules[channelKey];
+        if (rule !== null) {
+            channelRules[channelKey] = rule;
         }
-        changeOption({ channelRules: nextRules });
+        setOptions((current) => normalizeOptions({ ...current, channelRules }));
 
+        // the page applies and stores the rule so it can re-evaluate the open video;
+        // the popup only stores it itself when no YouTube tab answers
         try {
-            const status = await sendToActiveTab({
-                type: 'APPLY_CHANNEL_RULE',
-                channelKey,
-                rule,
-            });
-            setSideStatus(status);
+            setSideStatus(
+                await sendToActiveTab({
+                    type: 'APPLY_CHANNEL_RULE',
+                    channelKey,
+                    rule,
+                }),
+            );
         } catch {
-            // Keep local change
+            await commitUpdate({ channelRules });
         }
     };
 
@@ -390,9 +393,7 @@ const Popup = () => {
                             selected={options.channelRules[channelKey] ?? 'default'}
                             atSelect={(selection) => {
                                 const rule =
-                                    selection === 'default'
-                                        ? null
-                                        : (selection as 'always' | 'never');
+                                    selection === 'default' ? null : (selection as ChannelRule);
                                 void applyChannelRule(channelKey, rule);
                             }}
                             selectAtHover={false}
