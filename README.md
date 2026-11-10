@@ -3,14 +3,14 @@
 YouTube Side is a Chrome extension that shows the YouTube video description, comments, and live chat beside the video instead of below it, so the supporting information can be read without scrolling away from the picture.
 
 <p align="center">
-    <img src="https://raw.githubusercontent.com/plurid/youtube-side/master/about/images/ss-1.png" height="500px">
+    <img src="about/images/store/1-side-panel.png" alt="YouTube Side showing the description and comments beside the video" width="800">
 </p>
 
 The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-side/ehjnomdbkamcdhadcaghaflklcfhgonl).
 
 ## How it works
 
-Press **Alt/Option + S** on a YouTube page to lift the details panel beside the video; press it again to restore the original layout. The panel keeps YouTube's own content — the extension only repositions it.
+Press **Alt/Option + S** on a YouTube page to lift the details panel beside the video; press it again to restore the original layout. The panel keeps YouTube's own content; the extension only repositions it.
 
 - **Alt/Option + S** toggles the side panel.
 - **Alt/Option + B** switches between a transparent and a themed background; the themed background's blur and opacity are independently adjustable from the popup.
@@ -68,9 +68,11 @@ pnpm test
 pnpm test:coverage
 pnpm build
 pnpm package
+pnpm test:live     # the built extension in your installed Chrome, on live YouTube
+pnpm screenshots   # regenerates the store screenshots in about/images/store
 ```
 
-The unpacked extension is written to `distribution/`; the versioned store archive is written to `distribution-zip/`.
+The unpacked extension is written to `distribution/`; the versioned store archive is written to `distribution-zip/`. The store listing text and dashboard answers are in [about/store-listing.md](about/store-listing.md).
 
 To test locally, run `pnpm build`, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `packages/youtube-side-chrome/distribution`.
 

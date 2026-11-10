@@ -156,7 +156,7 @@ const timestampUrl = (url: string, seconds: number): string => {
 };
 
 export const exportStudyMarkdown = (videoTitle: string, url: string, study: VideoStudy): string => {
-    const lines: string[] = [`# ${videoTitle || 'YouTube Video'} — ${url}`, ''];
+    const lines: string[] = [`# ${videoTitle || 'YouTube Video'}`, '', url, ''];
 
     lines.push('## Bookmarks');
     if (study.bookmarks.length === 0) {
@@ -166,9 +166,8 @@ export const exportStudyMarkdown = (videoTitle: string, url: string, study: Vide
             const timeTag = formatTimestamp(bm.timeMs);
             const seconds = Math.floor(bm.timeMs / 1000);
             const cleanUrl = timestampUrl(url, seconds);
-            const labelPart = bm.label ? ` ${bm.label}` : '';
-            const notePart = bm.note ? ` — ${bm.note}` : '';
-            lines.push(`- [${timeTag}](${cleanUrl})${labelPart}${notePart}`);
+            const text = [bm.label, bm.note].filter(Boolean).join(': ');
+            lines.push(`- [${timeTag}](${cleanUrl})${text ? ` ${text}` : ''}`);
         }
     }
 

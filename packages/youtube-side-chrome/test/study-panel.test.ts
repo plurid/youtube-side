@@ -503,7 +503,7 @@ describe('StudyPanel', () => {
 
         expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Not yet saved'));
         expect(writeText.mock.calls[0]?.[0]).toContain(
-            '# Linear Algebra — https://www.youtube.com/watch?v=vidExport1',
+            '# Linear Algebra\n\nhttps://www.youtube.com/watch?v=vidExport1',
         );
         expect(execCommand).toHaveBeenCalledWith('copy');
         expect(copy.textContent).toBe('Copied!');

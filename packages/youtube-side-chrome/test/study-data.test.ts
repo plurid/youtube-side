@@ -135,9 +135,13 @@ describe('study data normalization and export', () => {
                 'https://www.youtube.com/watch?v=123',
                 study,
             );
-            expect(md).toContain('# My Lecture — https://www.youtube.com/watch?v=123');
-            expect(md).toContain('[12:34](https://www.youtube.com/watch?v=123&t=754s)');
-            expect(md).toContain('Key takeaway — Remember this');
+            expect(md.startsWith('# My Lecture\n\nhttps://www.youtube.com/watch?v=123\n')).toBe(
+                true,
+            );
+            expect(md).toContain(
+                '- [12:34](https://www.youtube.com/watch?v=123&t=754s) Key takeaway: Remember this',
+            );
+            expect(md).not.toContain('—');
             expect(md).toContain('General video thoughts.');
         });
 

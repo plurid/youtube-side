@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "YouTube Side",
     "short_name": "YouTube Side",
-    "description": "show YouTube video details and comments beside the video",
+    "description": "Read YouTube descriptions, comments, and live chat beside the video, with a searchable transcript, chapters, and notes.",
     "version": "1.1.0",
     "author": "plurid",
     "minimum_chrome_version": "120",
