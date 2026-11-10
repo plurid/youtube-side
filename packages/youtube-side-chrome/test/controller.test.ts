@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { YouTubeSideController } from '~contentscript/controller';
-import { DEFAULT_OPTIONS, OPTIONS_KEY } from '~data';
+import { DEFAULT_OPTIONS, OPTIONS_KEY, OPTIONS_VERSION } from '~data';
 
 import { type ChromeMock, createChromeMock } from './chrome';
 
@@ -54,7 +54,7 @@ describe('YouTubeSideController', () => {
         `;
         mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             },
         });
@@ -87,6 +87,44 @@ describe('YouTubeSideController', () => {
         expect(below.dataset.youtubeSideActive).toBeUndefined();
         expect(below.style.color).toBe('red');
         controller.stop();
+        controller.stop();
+    });
+
+    test('suspends in fullscreen and restores on exit', async () => {
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+
+        const below = document.getElementById('below') as HTMLElement;
+        expect(below.dataset.youtubeSideActive).toBe('true');
+        expect(below.dataset.youtubeSideSuspended).toBeUndefined();
+        expect(controller.getState().effectiveVisible).toBe(true);
+
+        // Enter fullscreen
+        Object.defineProperty(document, 'fullscreenElement', {
+            configurable: true,
+            value: document.body,
+        });
+        document.dispatchEvent(new Event('fullscreenchange'));
+        await flushLayout();
+
+        expect(below.dataset.youtubeSideSuspended).toBe('true');
+        expect(controller.getState().effectiveVisible).toBe(false);
+        expect(controller.getState().suspendReason).toBe('fullscreen');
+
+        // Exit fullscreen
+        Object.defineProperty(document, 'fullscreenElement', {
+            configurable: true,
+            value: null,
+        });
+        document.dispatchEvent(new Event('fullscreenchange'));
+        await flushLayout();
+
+        expect(below.dataset.youtubeSideSuspended).toBeUndefined();
+        expect(controller.getState().effectiveVisible).toBe(true);
+        expect(controller.getState().suspendReason).toBeNull();
+
         controller.stop();
     });
 
@@ -145,7 +183,7 @@ describe('YouTubeSideController', () => {
 
     test('applies independent blur, opacity, and inversion settings', async () => {
         mock.data[OPTIONS_KEY] = {
-            version: 2,
+            version: OPTIONS_VERSION,
             values: {
                 ...DEFAULT_OPTIONS,
                 background: 'opaque',
@@ -175,7 +213,7 @@ describe('YouTubeSideController', () => {
 
     test('auto mode inverts from the brightness behind the panel', async () => {
         mock.data[OPTIONS_KEY] = {
-            version: 2,
+            version: OPTIONS_VERSION,
             values: {
                 ...DEFAULT_OPTIONS,
                 invertText: 'auto',
@@ -256,13 +294,33 @@ describe('YouTubeSideController', () => {
         const controller = new YouTubeSideController();
         await controller.start();
 
-        await expect(mock.sendMessageMock(7, { type: 'GET_STATE' })).resolves.toEqual({
+        await expect(mock.sendMessageMock(7, { type: 'GET_STATE' })).resolves.toMatchObject({
             ok: true,
             status: { active: false, available: true },
         });
         await expect(
             mock.sendMessageMock(7, { type: 'SET_ACTIVE', active: true }),
-        ).resolves.toEqual({
+        ).resolves.toMatchObject({
+            ok: true,
+            status: { active: true, available: true },
+        });
+        await expect(
+            mock.sendMessageMock(7, {
+                type: 'APPLY_CHANNEL_RULE',
+                channelKey: '/c/testchannel',
+                rule: 'always',
+            }),
+        ).resolves.toMatchObject({
+            ok: true,
+            status: { active: true, available: true },
+        });
+        await expect(
+            mock.sendMessageMock(7, {
+                type: 'APPLY_CHANNEL_RULE',
+                channelKey: '/c/testchannel',
+                rule: null,
+            }),
+        ).resolves.toMatchObject({
             ok: true,
             status: { active: true, available: true },
         });
@@ -292,13 +350,14 @@ describe('YouTubeSideController', () => {
         controller.stop();
     });
 
-    test('toggles background and side through shortcuts while active', async () => {
+    test('toggles background, side, and study view through shortcuts', async () => {
         const controller = new YouTubeSideController();
         await controller.start();
         await flushLayout();
 
         pressShortcut('KeyB');
         pressShortcut('KeyL');
+        pressShortcut('KeyT');
         await flushLayout();
         expect(controller.getState().active).toBe(false);
 
@@ -306,13 +365,22 @@ describe('YouTubeSideController', () => {
         await flushLayout();
         expect(controller.getState().active).toBe(true);
 
-        pressShortcut('KeyB');
-        pressShortcut('KeyL');
-        await flushLayout();
-
         const below = document.getElementById('below') as HTMLElement;
         expect(below.dataset.youtubeSideBackground).toBe('opaque');
+
+        pressShortcut('KeyB');
+        await flushLayout();
+        expect(below.dataset.youtubeSideBackground).toBe('transparent');
+
+        pressShortcut('KeyB');
+        pressShortcut('KeyL');
+        pressShortcut('KeyT');
+        await flushLayout();
+
+        expect(below.dataset.youtubeSideBackground).toBe('opaque');
         expect(below.dataset.youtubeSidePosition).toBe('right');
+        expect(below.dataset.youtubeSideView).toBe('transcript');
+
         controller.stop();
         await flushLayout();
         expect(below.dataset.youtubeSideActive).toBeUndefined();
@@ -325,7 +393,7 @@ describe('YouTubeSideController', () => {
         await flushLayout();
 
         const below = document.getElementById('below') as HTMLElement;
-        expect(resizeObservers.length).toBe(1);
+        expect(resizeObservers.length).toBeGreaterThanOrEqual(1);
 
         below.style.width = '800px';
         below.style.height = '700px';
@@ -339,7 +407,7 @@ describe('YouTubeSideController', () => {
         expect(below.style.width).toBe('');
         expect(below.style.getPropertyValue('--youtube-side-width')).toBe('800px');
         expect(mock.data[OPTIONS_KEY]).toEqual({
-            version: 2,
+            version: OPTIONS_VERSION,
             values: {
                 ...DEFAULT_OPTIONS,
                 width: 800,
@@ -388,9 +456,106 @@ describe('YouTubeSideController', () => {
 
         expect(document.getElementById('related')?.dataset.youtubeSideHidden).toBe('true');
         expect(mock.data[OPTIONS_KEY]).toEqual({
-            version: 2,
+            version: OPTIONS_VERSION,
             values: DEFAULT_OPTIONS,
         });
+        controller.stop();
+    });
+
+    test('auto-activates on navigation when autoActivate rule matches', async () => {
+        window.history.pushState({}, '', '/watch?v=autoVid123');
+        mock.data[OPTIONS_KEY] = {
+            version: OPTIONS_VERSION,
+            values: {
+                ...DEFAULT_OPTIONS,
+                autoActivate: 'always',
+                studyAutoOpen: 'transcript',
+            },
+        };
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        await flushLayout();
+
+        expect(controller.getState().active).toBe(true);
+        const below = document.getElementById('below') as HTMLElement;
+        expect(below.dataset.youtubeSideView).toBe('transcript');
+
+        controller.stop();
+    });
+
+    test('applies player anchor layout and listens to video timeupdate', async () => {
+        mock.data[OPTIONS_KEY] = {
+            version: OPTIONS_VERSION,
+            values: {
+                ...DEFAULT_OPTIONS,
+                layoutAnchor: 'player',
+            },
+        };
+
+        const player = document.createElement('div');
+        player.id = 'player';
+        player.getBoundingClientRect = () =>
+            ({
+                left: 100,
+                top: 70,
+                right: 900,
+                bottom: 550,
+                width: 800,
+                height: 480,
+            }) as DOMRect;
+        document.body.append(player);
+
+        const video = document.createElement('video');
+        document.body.append(video);
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+
+        const below = document.getElementById('below') as HTMLElement;
+        expect(below.style.getPropertyValue('--youtube-side-height')).toBe('480px');
+
+        video.dispatchEvent(new Event('timeupdate'));
+        controller.stop();
+    });
+
+    test('handles deactivation decision and shortcuts when inactive', async () => {
+        window.history.pushState({}, '', '/watch?v=deact123');
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true, true); // Active with manual override = true
+        await flushLayout();
+        expect(controller.getState().active).toBe(true);
+
+        // Set manual override to false
+        controller.setActive(false, true);
+        controller.setActive(true); // force active without manual override change
+        await flushLayout();
+
+        // Navigation should evaluate auto-activation and deactivate
+        document.dispatchEvent(new Event('yt-navigate-finish'));
+        await flushLayout();
+        expect(controller.getState().active).toBe(false);
+
+        // Shortcuts when inactive should not do anything
+        pressShortcut('KeyB');
+        pressShortcut('KeyL');
+        pressShortcut('KeyT');
+        pressShortcut('KeyZ');
+        await flushLayout();
+        expect(controller.getState().active).toBe(false);
+
+        // Clicking native Show Transcript button activates side and opens transcript view
+        const transcriptBtn = document.createElement('button');
+        transcriptBtn.textContent = 'Show transcript';
+        document.body.append(transcriptBtn);
+        transcriptBtn.click();
+        await flushLayout();
+        expect(controller.getState().active).toBe(true);
+        transcriptBtn.remove();
+
         controller.stop();
     });
 });

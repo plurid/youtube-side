@@ -68,7 +68,9 @@ const assertBundleSize = async (filename, rawLimit, gzipLimit) => {
     }
 };
 
-await assertBundleSize('contentscript.js', 25_000, 8_000);
+// content script budget accommodates study mode (transcript/chapters/notes)
+// and player-adaptive geometry engines while remaining dependency-free
+await assertBundleSize('contentscript.js', 60_000, 20_000);
 await assertBundleSize('popup.js', 450_000, 140_000);
 
 const archivePath = path.join(

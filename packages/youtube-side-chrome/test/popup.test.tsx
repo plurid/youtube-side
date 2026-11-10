@@ -1,7 +1,7 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { DEFAULT_OPTIONS, OPTIONS_KEY } from '~data/options';
+import { DEFAULT_OPTIONS, OPTIONS_KEY, OPTIONS_VERSION, type Options } from '~data/options';
 
 import { createChromeMock } from './chrome';
 
@@ -49,19 +49,34 @@ jest.mock('@plurid/plurid-ui-components-react', () => ({
         atSelect: (selection: string) => void;
         selectables: string[];
         selected: string;
-    }) => (
-        <select
-            aria-label="invert text"
-            value={selected}
-            onChange={(event) => atSelect(event.currentTarget.value)}
-        >
-            {selectables.map((item) => (
-                <option key={item} value={item}>
-                    {item}
-                </option>
-            ))}
-        </select>
-    ),
+    }) => {
+        let label = 'dropdown';
+        if (selectables.includes('auto') && selectables.includes('off')) {
+            label = 'invert text';
+        } else if (selectables.includes('viewport')) {
+            label = 'anchor';
+        } else if (selectables.includes('long')) {
+            label = 'auto-activate';
+        } else if (selectables.includes('transcript')) {
+            label = 'auto-open view';
+        } else if (selectables.includes('default')) {
+            label = 'channel rule';
+        }
+
+        return (
+            <select
+                aria-label={label}
+                value={selected}
+                onChange={(event) => atSelect(event.currentTarget.value)}
+            >
+                {selectables.map((item) => (
+                    <option key={item} value={item}>
+                        {item}
+                    </option>
+                ))}
+            </select>
+        );
+    },
     Slider: ({
         atChange,
         max,
@@ -95,7 +110,7 @@ describe('Popup', () => {
     test('hydrates from storage and saves toggled controls', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
                     background: 'opaque',
@@ -113,7 +128,7 @@ describe('Popup', () => {
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
                     background: 'opaque',
@@ -127,7 +142,7 @@ describe('Popup', () => {
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
                     background: 'opaque',
@@ -141,7 +156,7 @@ describe('Popup', () => {
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
                     background: 'opaque',
@@ -156,9 +171,10 @@ describe('Popup', () => {
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
+                    background: 'transparent',
                     blur: 8,
                     opacity: 40,
                     invertText: 'auto',
@@ -169,43 +185,129 @@ describe('Popup', () => {
         expect(screen.queryByLabelText('opacity')).not.toBeInTheDocument();
     });
 
-    test('toggles the side layout on the active tab', async () => {
+    test('toggles the side layout on the active tab and renders suspend notice', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             },
         });
         mock.sendMessageMock.mockResolvedValueOnce({
             ok: true,
-            status: { active: false, available: true },
+            status: {
+                active: true,
+                available: true,
+                suspendReason: 'fullscreen',
+            },
         });
 
         render(<Popup />);
 
+        expect(await screen.findByText('Suspended in fullscreen')).toBeInTheDocument();
+
         const toggle = await screen.findByRole('button', { name: 'side position [⌥ + S]' });
-        expect(toggle).toHaveAttribute('aria-pressed', 'false');
+        expect(toggle).toHaveAttribute('aria-pressed', 'true');
         expect(mock.sendMessageMock).toHaveBeenCalledWith(7, { type: 'GET_STATE' });
 
         mock.sendMessageMock.mockResolvedValueOnce({
             ok: true,
-            status: { active: true, available: true },
+            status: { active: false, available: true, suspendReason: null },
         });
         fireEvent.click(toggle);
 
         await waitFor(() => {
-            expect(toggle).toHaveAttribute('aria-pressed', 'true');
+            expect(toggle).toHaveAttribute('aria-pressed', 'false');
         });
         expect(mock.sendMessageMock).toHaveBeenLastCalledWith(7, {
             type: 'SET_ACTIVE',
-            active: true,
+            active: false,
+        });
+    });
+
+    test('updates adaptive layout and study mode options', async () => {
+        const mock = createChromeMock({
+            [OPTIONS_KEY]: {
+                version: OPTIONS_VERSION,
+                values: DEFAULT_OPTIONS,
+            },
+        });
+        mock.sendMessageMock.mockResolvedValueOnce({
+            ok: true,
+            status: {
+                active: true,
+                available: true,
+                context: {
+                    videoId: '123',
+                    channelKey: '/c/sample',
+                    mode: 'default',
+                    kind: 'standard',
+                    durationSeconds: 100,
+                    playerRect: null,
+                },
+            },
+        });
+
+        render(<Popup />);
+
+        const getStoredValues = () =>
+            (mock.data[OPTIONS_KEY] as { version: number; values: Options } | undefined)?.values;
+
+        const anchor = await screen.findByLabelText('anchor');
+        fireEvent.change(anchor, { target: { value: 'player' } });
+
+        await waitFor(() => {
+            expect(getStoredValues()?.layoutAnchor).toBe('player');
+        });
+
+        const autoActivate = screen.getByLabelText('auto-activate');
+        fireEvent.change(autoActivate, { target: { value: 'live' } });
+
+        await waitFor(() => {
+            expect(getStoredValues()?.autoActivate).toBe('live');
+        });
+
+        // Channel rule
+        const channelRule = screen.getByLabelText('channel rule');
+        fireEvent.change(channelRule, { target: { value: 'always' } });
+        await waitFor(() => {
+            const rules = getStoredValues()?.channelRules;
+            expect(rules?.['/c/sample']).toBe('always');
+        });
+
+        fireEvent.change(channelRule, { target: { value: 'default' } });
+        await waitFor(() => {
+            const rules = getStoredValues()?.channelRules;
+            expect(rules?.['/c/sample']).toBeUndefined();
+        });
+
+        // Follow transcript
+        const follow = screen.getByRole('button', { name: 'follow transcript' });
+        expect(follow).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(follow);
+        await waitFor(() => {
+            expect(getStoredValues()?.studyFollow).toBe(false);
+        });
+
+        // Auto open view
+        const autoOpen = screen.getByLabelText('auto-open view');
+        fireEvent.change(autoOpen, { target: { value: 'transcript' } });
+        await waitFor(() => {
+            expect(getStoredValues()?.studyAutoOpen).toBe('transcript');
+        });
+
+        const studyMode = screen.getByRole('button', { name: 'study mode [⌥ + T]' });
+        expect(studyMode).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.click(studyMode);
+
+        await waitFor(() => {
+            expect(getStoredValues()?.studyEnabled).toBe(false);
         });
     });
 
     test('hides the side toggle when no YouTube tab answers', async () => {
         createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             },
         });
@@ -221,7 +323,7 @@ describe('Popup', () => {
     test('debounces dimension edits into one save', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             },
         });
@@ -237,7 +339,7 @@ describe('Popup', () => {
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
                     width: 640,
@@ -251,7 +353,7 @@ describe('Popup', () => {
     test('resets pending edits and all settings through the options module', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: {
                     ...DEFAULT_OPTIONS,
                     blur: 9,
@@ -271,7 +373,7 @@ describe('Popup', () => {
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             });
         });
@@ -281,7 +383,7 @@ describe('Popup', () => {
     test('keeps the last stored options when writes fail', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             },
         });
@@ -300,7 +402,7 @@ describe('Popup', () => {
             expect(mock.setMock).toHaveBeenCalledTimes(2);
         });
         expect(mock.data[OPTIONS_KEY]).toEqual({
-            version: 2,
+            version: OPTIONS_VERSION,
             values: DEFAULT_OPTIONS,
         });
     });
@@ -308,7 +410,7 @@ describe('Popup', () => {
     test('cleans up pending work on unmount', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
-                version: 2,
+                version: OPTIONS_VERSION,
                 values: DEFAULT_OPTIONS,
             },
         });

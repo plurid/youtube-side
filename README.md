@@ -16,8 +16,24 @@ Press **Alt/Option + S** on a YouTube page to lift the details panel beside the 
 - **Alt/Option + B** switches between a transparent and a themed background; the themed background's blur and opacity are independently adjustable from the popup.
 - **Alt/Option + L** moves the panel to the left or right edge.
 - **Alt/Option + R** shows or hides the recommendations column.
+- **Alt/Option + T** toggles Study Mode or cycles between views (Side, Transcript, Chapters, Notes).
 - The popup's **side position** switch toggles the layout for the current tab, same as Alt/Option + S; the popup talks to the YouTube page over extension messaging, so no extra permission is needed.
 - The popup's **invert text** control inverts the panel's text and background colors while keeping avatars and thumbnails intact - useful when a transparent panel sits over a bright video. In **auto** mode the extension samples the video region behind the panel about once a second and inverts only while that area is bright, with hysteresis so scene cuts do not cause flicker. Frames never leave the page.
+
+### Adaptive Layout
+
+- **Anchor Modes**: Position the panel anchored to the viewport edge or aligned flush with the video player (`viewport` vs `player`).
+- **Player-Mode Awareness**: Automatically suspends the side panel when entering fullscreen or miniplayer / PiP mode, and restores it when returning to standard view.
+- **Contextual Activation Rules**: Automatically activate Side layout depending on video context: `never`, `live` (for live streams and premieres), `long` (for videos ≥ 20 minutes), or `always`.
+- **Per-Channel Rules**: Set custom overrides for specific channels to `always` or `never` open in Side layout.
+- **Viewport Presets**: Switch between tailored size presets (`standard`, `live`, `theater`) or keep custom dragged dimensions.
+
+### Study Mode
+
+- **Transcript Viewer**: Fast, searchable timed transcript using direct YouTube timedtext JSON3 with zero content-script dependencies and fallback to DOM rendering.
+- **Chapter Navigation**: Parsed video chapters with auto-updating playback indicator and instant seek on click.
+- **Notes & Bookmarks**: Capture timestamps with single clicks, attach inline notes, and persist them per video in local extension storage (LRU bounded).
+- **Markdown Export**: Export your study session (video title, URL, timestamped bookmarks, and notes) as formatted Markdown.
 
 The panel can be resized directly by dragging its bottom corner (always the corner facing the page content) - the size is remembered. The popup configures the background, blur strength, background opacity, side, exact width and height, and recommendations. Preferences are shared through extension storage and are validated on every read: dimensions are clamped to sensible bounds (width 320–1200, height 240–1200), so a corrupted value can never break the layout. The layout is applied through a scoped stylesheet and data attributes, never by overwriting YouTube's own inline styles, and it survives YouTube's in-page navigation.
 

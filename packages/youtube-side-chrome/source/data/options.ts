@@ -1,6 +1,25 @@
 export type InvertTextMode = 'off' | 'auto' | 'on';
+export type LayoutAnchor = 'viewport' | 'player';
+export type AutoActivate = 'never' | 'live' | 'long' | 'always';
+export type PresetKey = 'standard' | 'live' | 'theater';
+export type StudyAutoOpen = 'off' | 'transcript' | 'chapters';
 
 export const INVERT_TEXT_MODES: readonly InvertTextMode[] = ['off', 'auto', 'on'];
+export const LAYOUT_ANCHORS: readonly LayoutAnchor[] = ['viewport', 'player'];
+export const AUTO_ACTIVATE_MODES: readonly AutoActivate[] = ['never', 'live', 'long', 'always'];
+export const STUDY_AUTO_OPEN_MODES: readonly StudyAutoOpen[] = ['off', 'transcript', 'chapters'];
+
+export interface LayoutPreset {
+    background?: 'transparent' | 'opaque';
+    blur?: number;
+    opacity?: number;
+    invertText?: InvertTextMode;
+    width?: number;
+    height?: number;
+    left?: boolean;
+    recommendations?: boolean;
+    layoutAnchor?: LayoutAnchor;
+}
 
 export interface Options {
     background: 'transparent' | 'opaque';
@@ -11,10 +30,21 @@ export interface Options {
     height: number;
     left: boolean;
     recommendations: boolean;
+
+    // Direction C (Adaptive Layout)
+    layoutAnchor: LayoutAnchor;
+    autoActivate: AutoActivate;
+    presets: Partial<Record<PresetKey, LayoutPreset>>;
+    channelRules: Record<string, 'always' | 'never'>;
+
+    // Direction A (Study Mode)
+    studyEnabled: boolean;
+    studyFollow: boolean;
+    studyAutoOpen: StudyAutoOpen;
 }
 
 interface StoredOptions {
-    version: 2;
+    version: 3;
     values: Options;
 }
 
@@ -22,7 +52,7 @@ export type OptionsUpdate = Partial<Options>;
 export type OptionsListener = (options: Options) => void;
 
 export const OPTIONS_KEY = 'youtubeSideOptions';
-export const OPTIONS_VERSION = 2;
+export const OPTIONS_VERSION = 3;
 
 export const WIDTH_MIN = 320;
 export const WIDTH_MAX = 1_200;
@@ -33,21 +63,36 @@ export const BLUR_MAX = 20;
 export const OPACITY_MIN = 0;
 export const OPACITY_MAX = 100;
 
+export const MAX_CHANNEL_RULES = 100;
+
 // the blur strength that the boolean `blurred` option applied before version 2
 const LEGACY_BLUR = 5;
 
 export const DEFAULT_OPTIONS: Readonly<Options> = Object.freeze({
-    background: 'transparent',
-    blur: 0,
-    opacity: 100,
+    background: 'opaque',
+    blur: 10,
+    opacity: 50,
     invertText: 'off',
     width: 500,
     height: 550,
     left: true,
     recommendations: true,
+
+    layoutAnchor: 'viewport',
+    autoActivate: 'never',
+    presets: Object.freeze({}),
+    channelRules: Object.freeze({}),
+
+    studyEnabled: true,
+    studyFollow: true,
+    studyAutoOpen: 'off',
 });
 
-const defaults = (): Options => ({ ...DEFAULT_OPTIONS });
+const defaults = (): Options => ({
+    ...DEFAULT_OPTIONS,
+    presets: {},
+    channelRules: {},
+});
 
 const isInvertTextMode = (value: unknown): value is InvertTextMode =>
     value === 'off' || value === 'auto' || value === 'on';
@@ -79,7 +124,7 @@ const optionValues = (value: unknown): Record<string, unknown> => {
         return {};
     }
 
-    if (value.version === OPTIONS_VERSION && isRecord(value.values)) {
+    if ((value.version === OPTIONS_VERSION || value.version === 2) && isRecord(value.values)) {
         return value.values;
     }
 
@@ -90,13 +135,121 @@ const optionValues = (value: unknown): Record<string, unknown> => {
     return migrateBlurred(value);
 };
 
+export const normalizePreset = (value: unknown): LayoutPreset | undefined => {
+    if (!isRecord(value)) {
+        return undefined;
+    }
+
+    const preset: LayoutPreset = {};
+    if (value.background === 'opaque' || value.background === 'transparent') {
+        preset.background = value.background;
+    }
+    if (typeof value.blur === 'number') {
+        preset.blur = boundedInteger(value.blur, DEFAULT_OPTIONS.blur, BLUR_MIN, BLUR_MAX);
+    }
+    if (typeof value.opacity === 'number') {
+        preset.opacity = boundedInteger(
+            value.opacity,
+            DEFAULT_OPTIONS.opacity,
+            OPACITY_MIN,
+            OPACITY_MAX,
+        );
+    }
+    if (isInvertTextMode(value.invertText)) {
+        preset.invertText = value.invertText;
+    }
+    if (typeof value.width === 'number') {
+        preset.width = boundedInteger(value.width, DEFAULT_OPTIONS.width, WIDTH_MIN, WIDTH_MAX);
+    }
+    if (typeof value.height === 'number') {
+        preset.height = boundedInteger(
+            value.height,
+            DEFAULT_OPTIONS.height,
+            HEIGHT_MIN,
+            HEIGHT_MAX,
+        );
+    }
+    if (typeof value.left === 'boolean') {
+        preset.left = value.left;
+    }
+    if (typeof value.recommendations === 'boolean') {
+        preset.recommendations = value.recommendations;
+    }
+    if (value.layoutAnchor === 'viewport' || value.layoutAnchor === 'player') {
+        preset.layoutAnchor = value.layoutAnchor;
+    }
+
+    return Object.keys(preset).length > 0 ? preset : undefined;
+};
+
+export const normalizePresets = (value: unknown): Partial<Record<PresetKey, LayoutPreset>> => {
+    if (!isRecord(value)) {
+        return {};
+    }
+
+    const presets: Partial<Record<PresetKey, LayoutPreset>> = {};
+    const standard = normalizePreset(value.standard);
+    if (standard) {
+        presets.standard = standard;
+    }
+    const live = normalizePreset(value.live);
+    if (live) {
+        presets.live = live;
+    }
+    const theater = normalizePreset(value.theater);
+    if (theater) {
+        presets.theater = theater;
+    }
+
+    return presets;
+};
+
+export const normalizeChannelRules = (value: unknown): Record<string, 'always' | 'never'> => {
+    if (!isRecord(value)) {
+        return {};
+    }
+
+    const rules: Record<string, 'always' | 'never'> = {};
+    const entries = Object.entries(value);
+    const start = Math.max(0, entries.length - MAX_CHANNEL_RULES);
+    for (let index = start; index < entries.length; index += 1) {
+        const [key, rule] = entries[index] ?? [];
+        if (!key) {
+            continue;
+        }
+        const normalizedKey = key.trim().toLowerCase();
+        if (normalizedKey.length > 0 && (rule === 'always' || rule === 'never')) {
+            rules[normalizedKey] = rule;
+        }
+    }
+
+    return rules;
+};
+
 export const normalizeOptions = (value: unknown): Options => {
     const candidate = optionValues(value);
     const blur = boundedInteger(candidate.blur, DEFAULT_OPTIONS.blur, BLUR_MIN, BLUR_MAX);
 
     // values stored before opacity became its own option composed it
     // from the blur strength; derive the same look for them
-    const opacityFallback = blur > 0 ? 100 - blur * 2 : DEFAULT_OPTIONS.opacity;
+    const opacityFallback =
+        typeof candidate.blur === 'number' && candidate.blur > 0
+            ? 100 - candidate.blur * 2
+            : DEFAULT_OPTIONS.opacity;
+
+    const layoutAnchor: LayoutAnchor = candidate.layoutAnchor === 'player' ? 'player' : 'viewport';
+
+    const autoActivate: AutoActivate =
+        candidate.autoActivate === 'live' ||
+        candidate.autoActivate === 'long' ||
+        candidate.autoActivate === 'always'
+            ? candidate.autoActivate
+            : 'never';
+
+    const studyAutoOpen: StudyAutoOpen =
+        candidate.studyAutoOpen === 'transcript' || candidate.studyAutoOpen === 'chapters'
+            ? candidate.studyAutoOpen
+            : 'off';
 
     return {
         background:
@@ -117,6 +270,21 @@ export const normalizeOptions = (value: unknown): Options => {
             typeof candidate.recommendations === 'boolean'
                 ? candidate.recommendations
                 : DEFAULT_OPTIONS.recommendations,
+
+        layoutAnchor,
+        autoActivate,
+        presets: normalizePresets(candidate.presets),
+        channelRules: normalizeChannelRules(candidate.channelRules),
+
+        studyEnabled:
+            typeof candidate.studyEnabled === 'boolean'
+                ? candidate.studyEnabled
+                : DEFAULT_OPTIONS.studyEnabled,
+        studyFollow:
+            typeof candidate.studyFollow === 'boolean'
+                ? candidate.studyFollow
+                : DEFAULT_OPTIONS.studyFollow,
+        studyAutoOpen,
     };
 };
 
@@ -142,7 +310,9 @@ export const loadOptions = async (): Promise<Options> => {
 
 let writeQueue: Promise<void> = Promise.resolve();
 
-const enqueueWrite = (resolveOptions: () => Promise<Options> | Options): Promise<Options> => {
+export const enqueueWrite = (
+    resolveOptions: () => Promise<Options> | Options,
+): Promise<Options> => {
     const result = writeQueue.then(async () => {
         const options = await resolveOptions();
         return storeOptions(options);

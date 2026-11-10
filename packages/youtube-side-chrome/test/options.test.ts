@@ -5,8 +5,13 @@ import {
     DEFAULT_OPTIONS,
     HEIGHT_MAX,
     loadOptions,
+    MAX_CHANNEL_RULES,
+    normalizeChannelRules,
     normalizeOptions,
+    normalizePreset,
+    normalizePresets,
     OPTIONS_KEY,
+    OPTIONS_VERSION,
     resetOptions,
     subscribeOptions,
     updateOptions,
@@ -102,6 +107,81 @@ describe('Options module', () => {
         expect(normalizeOptions({ invertText: 'nonsense' })).toEqual(DEFAULT_OPTIONS);
     });
 
+    test('normalizes options v3 fields (adaptive layout and study mode)', () => {
+        const result = normalizeOptions({
+            layoutAnchor: 'player',
+            autoActivate: 'long',
+            studyEnabled: false,
+            studyFollow: false,
+            studyAutoOpen: 'chapters',
+            presets: {
+                standard: { width: 600, background: 'opaque' },
+            },
+            channelRules: {
+                '/c/test': 'always',
+            },
+        });
+
+        expect(result.layoutAnchor).toBe('player');
+        expect(result.autoActivate).toBe('long');
+        expect(result.studyEnabled).toBe(false);
+        expect(result.studyFollow).toBe(false);
+        expect(result.studyAutoOpen).toBe('chapters');
+        expect(result.presets.standard).toEqual({ width: 600, background: 'opaque' });
+        expect(result.channelRules).toEqual({ '/c/test': 'always' });
+    });
+
+    test('normalizePreset and normalizePresets clamp and validate', () => {
+        expect(normalizePreset(null)).toBeUndefined();
+        expect(
+            normalizePreset({
+                width: 2000,
+                blur: 50,
+                opacity: 200,
+                background: 'opaque',
+                layoutAnchor: 'player',
+                invertText: 'on',
+                left: false,
+                recommendations: true,
+            }),
+        ).toEqual({
+            width: 1200,
+            blur: 20,
+            opacity: 100,
+            background: 'opaque',
+            layoutAnchor: 'player',
+            invertText: 'on',
+            left: false,
+            recommendations: true,
+        });
+
+        expect(normalizePresets('invalid')).toEqual({});
+        expect(
+            normalizePresets({
+                standard: { width: 550 },
+                live: { background: 'transparent' },
+                theater: { height: 600 },
+                unknown: { width: 100 },
+            }),
+        ).toEqual({
+            standard: { width: 550 },
+            live: { background: 'transparent' },
+            theater: { height: 600 },
+        });
+    });
+
+    test('normalizeChannelRules caps at MAX_CHANNEL_RULES', () => {
+        expect(normalizeChannelRules(null)).toEqual({});
+        const manyRules: Record<string, string> = {};
+        for (let i = 0; i < 150; i++) {
+            manyRules[`/c/channel_${i}`] = 'always';
+        }
+        const normalized = normalizeChannelRules(manyRules);
+        expect(Object.keys(normalized).length).toBe(MAX_CHANNEL_RULES);
+        expect(normalized['/c/channel_149']).toBe('always');
+        expect(normalized['/c/channel_0']).toBeUndefined();
+    });
+
     test('serializes updates and resets every option', async () => {
         const mock = createChromeMock({
             [OPTIONS_KEY]: {
@@ -121,9 +201,10 @@ describe('Options module', () => {
             recommendations: false,
         });
         expect(mock.data[OPTIONS_KEY]).toEqual({
-            version: 2,
+            version: OPTIONS_VERSION,
             values: {
                 ...DEFAULT_OPTIONS,
+                background: 'transparent',
                 blur: 5,
                 opacity: 90,
                 recommendations: false,

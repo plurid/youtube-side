@@ -11,11 +11,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getActiveTab } from '~common/utilities';
 import { isSideResponse, type SideRequest, type SideStatus } from '~data/messages';
 import {
+    AUTO_ACTIVATE_MODES,
+    type AutoActivate,
     BLUR_MAX,
     BLUR_MIN,
     DEFAULT_OPTIONS,
     INVERT_TEXT_MODES,
     type InvertTextMode,
+    LAYOUT_ANCHORS,
+    type LayoutAnchor,
     loadOptions,
     normalizeOptions,
     OPACITY_MAX,
@@ -23,11 +27,20 @@ import {
     type Options,
     type OptionsUpdate,
     resetOptions,
+    STUDY_AUTO_OPEN_MODES,
+    type StudyAutoOpen,
     subscribeOptions,
     updateOptions,
 } from '~data/options';
 
-import { inputStyle, StyledOptionRow, StyledPopup, StyledSliders } from './styled';
+import {
+    inputStyle,
+    StyledNotice,
+    StyledOptionRow,
+    StyledPopup,
+    StyledSection,
+    StyledSliders,
+} from './styled';
 
 const SAVE_DELAY = 200;
 
@@ -116,6 +129,27 @@ const Popup = () => {
         }
     };
 
+    const applyChannelRule = async (channelKey: string, rule: 'always' | 'never' | null) => {
+        const nextRules = { ...options.channelRules };
+        if (rule === null) {
+            delete nextRules[channelKey];
+        } else {
+            nextRules[channelKey] = rule;
+        }
+        changeOption({ channelRules: nextRules });
+
+        try {
+            const status = await sendToActiveTab({
+                type: 'APPLY_CHANNEL_RULE',
+                channelKey,
+                rule,
+            });
+            setSideStatus(status);
+        } catch {
+            // Keep local change
+        }
+    };
+
     useEffect(() => {
         let mounted = true;
 
@@ -174,12 +208,17 @@ const Popup = () => {
     }
 
     const background = options.background === 'opaque';
+    const channelKey = sideStatus?.context?.channelKey;
 
     return (
         <StyledPopup theme={dewiki}>
             <h1>YouTube Side</h1>
 
             <div>press alt/option (⌥) + S on a YouTube page to activate side positioning</div>
+
+            {sideStatus?.suspendReason && (
+                <StyledNotice>Suspended in {sideStatus.suspendReason}</StyledNotice>
+            )}
 
             {sideStatus?.available && (
                 <InputSwitch
@@ -309,6 +348,108 @@ const Popup = () => {
                 style={inputStyle}
             />
 
+            {/* Adaptive Layout Section */}
+            <StyledSection>
+                <h2>Adaptive Layout</h2>
+
+                <StyledOptionRow>
+                    <div>anchor</div>
+                    <Dropdown
+                        selectables={[...LAYOUT_ANCHORS]}
+                        selected={options.layoutAnchor}
+                        atSelect={(selection) => {
+                            changeOption({ layoutAnchor: selection as LayoutAnchor });
+                        }}
+                        selectAtHover={false}
+                        theme={dewiki}
+                        level={2}
+                        width={110}
+                    />
+                </StyledOptionRow>
+
+                <StyledOptionRow>
+                    <div>auto-activate</div>
+                    <Dropdown
+                        selectables={[...AUTO_ACTIVATE_MODES]}
+                        selected={options.autoActivate}
+                        atSelect={(selection) => {
+                            changeOption({ autoActivate: selection as AutoActivate });
+                        }}
+                        selectAtHover={false}
+                        theme={dewiki}
+                        level={2}
+                        width={110}
+                    />
+                </StyledOptionRow>
+
+                {channelKey && (
+                    <StyledOptionRow>
+                        <div>channel rule</div>
+                        <Dropdown
+                            selectables={['default', 'always', 'never']}
+                            selected={options.channelRules[channelKey] ?? 'default'}
+                            atSelect={(selection) => {
+                                const rule =
+                                    selection === 'default'
+                                        ? null
+                                        : (selection as 'always' | 'never');
+                                void applyChannelRule(channelKey, rule);
+                            }}
+                            selectAtHover={false}
+                            theme={dewiki}
+                            level={2}
+                            width={110}
+                        />
+                    </StyledOptionRow>
+                )}
+            </StyledSection>
+
+            {/* Study Mode Section */}
+            <StyledSection>
+                <h2>Study Mode</h2>
+
+                <InputSwitch
+                    name="study mode [⌥ + T]"
+                    checked={options.studyEnabled}
+                    atChange={() => {
+                        changeOption({ studyEnabled: !options.studyEnabled });
+                    }}
+                    theme={dewiki}
+                    style={inputStyle}
+                />
+
+                {options.studyEnabled && (
+                    <>
+                        <InputSwitch
+                            name="follow transcript"
+                            checked={options.studyFollow}
+                            atChange={() => {
+                                changeOption({ studyFollow: !options.studyFollow });
+                            }}
+                            theme={dewiki}
+                            style={inputStyle}
+                        />
+
+                        <StyledOptionRow>
+                            <div>auto-open view</div>
+                            <Dropdown
+                                selectables={[...STUDY_AUTO_OPEN_MODES]}
+                                selected={options.studyAutoOpen}
+                                atSelect={(selection) => {
+                                    changeOption({
+                                        studyAutoOpen: selection as StudyAutoOpen,
+                                    });
+                                }}
+                                selectAtHover={false}
+                                theme={dewiki}
+                                level={2}
+                                width={110}
+                            />
+                        </StyledOptionRow>
+                    </>
+                )}
+            </StyledSection>
+
             <div>
                 <LinkButton
                     text="reset"
@@ -317,7 +458,7 @@ const Popup = () => {
                     }}
                     theme={dewiki}
                     style={{
-                        marginTop: '2rem',
+                        marginTop: '1.5rem',
                     }}
                     inline={true}
                 />

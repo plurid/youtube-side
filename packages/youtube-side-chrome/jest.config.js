@@ -12,6 +12,12 @@ module.exports = {
     setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
     collectCoverageFrom: [
         'source/contentscript/controller.ts',
+        'source/contentscript/player.ts',
+        'source/contentscript/styles.ts',
+        'source/contentscript/study/chapters.ts',
+        'source/contentscript/study/studyPanel.ts',
+        'source/contentscript/study/studyStore.ts',
+        'source/contentscript/study/transcript.ts',
         'source/data/*.ts',
         'source/popup/components/Popup/index.tsx',
     ],
