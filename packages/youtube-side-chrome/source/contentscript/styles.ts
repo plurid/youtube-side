@@ -26,7 +26,29 @@ export const OFFSET_Y_PROPERTY = '--youtube-side-offset-y';
 // the height of YouTube's masthead; the panel sits flush against it
 export const MASTHEAD_HEIGHT = 56;
 
+// YouTube no longer exposes its --yt-spec-* color tokens; its theme is only
+// visible as html[dark], so the panel carries its own palette for each theme
 export const STYLES = `
+#${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"] {
+    --youtube-side-surface: #0f0f0f;
+    --youtube-side-text: #f1f1f1;
+    --youtube-side-muted: #aaa;
+    --youtube-side-layer: rgba(255, 255, 255, 0.1);
+    --youtube-side-chip: rgba(255, 255, 255, 0.2);
+    --youtube-side-accent: #3ea6ff;
+    --youtube-side-error: #ff8a80;
+}
+
+html:not([dark]) #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"] {
+    --youtube-side-surface: #fff;
+    --youtube-side-text: #0f0f0f;
+    --youtube-side-muted: #606060;
+    --youtube-side-layer: rgba(0, 0, 0, 0.05);
+    --youtube-side-chip: rgba(0, 0, 0, 0.1);
+    --youtube-side-accent: #065fd4;
+    --youtube-side-error: #c00;
+}
+
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"] {
     box-sizing: border-box !important;
     position: fixed !important;
@@ -73,7 +95,7 @@ export const STYLES = `
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${BACKGROUND_ATTRIBUTE}="opaque"] {
     background: color-mix(
         in srgb,
-        var(--yt-spec-base-background, #0f0f0f) var(${OPACITY_PROPERTY}, 100%),
+        var(--youtube-side-surface) var(${OPACITY_PROPERTY}, 100%),
         transparent
     ) !important;
     backdrop-filter: blur(var(${BLUR_PROPERTY}, 0px)) !important;
@@ -100,17 +122,13 @@ export const STYLES = `
 
 /* study mode lives inside the panel; it only takes the panel over in its own views */
 #${STUDY_ID} {
-    --youtube-side-layer: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, 0.1));
-    --youtube-side-chip: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.2));
-    --youtube-side-accent: var(--yt-spec-call-to-action, #3ea6ff);
-    --youtube-side-muted: var(--yt-spec-text-secondary, #aaa);
     display: flex;
     flex-direction: column;
     gap: 10px;
     margin-bottom: 16px;
     font-family: Roboto, Arial, sans-serif;
     font-size: 13px;
-    color: var(--yt-spec-text-primary, #f1f1f1);
+    color: var(--youtube-side-text);
 }
 
 #${STUDY_ID} [hidden],
@@ -215,7 +233,7 @@ export const STYLES = `
 }
 
 .youtube-side-notice {
-    color: #ff8a80;
+    color: var(--youtube-side-error);
     font-size: 12px;
 }
 

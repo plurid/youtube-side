@@ -271,6 +271,7 @@ YouTube update, check these first; each lives in one adapter.
 | transcript panels: `target-id` contains `transcript`; close with `#visibility-button button` | panel state and restore | `transcript.ts` |
 | `ytd-macro-markers-list-item-renderer` with `#time` and `h3.macro-markers[title]`, rendered up to three times | chapters | `chapters.ts` |
 | YouTube's player shortcuts listen on the page, not only on the player | keeping panel keys local | `studyPanel.ts` |
+| the theme is `html[dark]`; YouTube's `--yt-spec-*` color variables no longer exist on the page | the panel's own light and dark palettes | `styles.ts` |
 | Trusted Types are enforced | text-only rendering | everywhere |
 
 ## Building, testing, and releasing

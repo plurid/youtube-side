@@ -135,6 +135,9 @@ describe('YouTubeSideController', () => {
         await flushLayout();
 
         const styles = document.getElementById('youtube-side-styles')?.textContent ?? '';
+        // YouTube's --yt-spec-* tokens no longer exist; colors follow html[dark] instead
+        expect(styles).not.toContain('--yt-spec-');
+        expect(styles).toContain('html:not([dark]) #below[data-youtube-side-active="true"]');
         expect(styles).toContain('margin: 0 !important;');
         expect(styles).toContain('left: var(--youtube-side-offset-x, 0px) !important;');
         expect(styles).toContain('right: var(--youtube-side-offset-x, 0px) !important;');
