@@ -54,6 +54,10 @@ Upload in this order from `about/images/store/` (1280×800 PNG, regenerate with 
 5. `5-theater-anchor.png`: theater mode with the panel anchored to the player
 6. `6-light-right.png`: light theme, panel on the right, recommendations hidden
 
+## Promo tiles
+
+Refreshed, in `about/images/`: `promo-1.png` (small promo tile, 440×280) and `promo-2.png` (marquee promo tile, 1400×560).
+
 ## Privacy practices tab
 
 **Single purpose:**

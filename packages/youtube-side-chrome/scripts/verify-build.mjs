@@ -14,6 +14,8 @@ const manifest = JSON.parse(
 
 const expectedFiles = new Set([
     'LICENSE',
+    'assets/fonts/UBUNTU_FONT_LICENCE.txt',
+    'assets/fonts/ubuntu-regular.woff2',
     'assets/icons/icon.png',
     'assets/icons/icon16.png',
     'assets/icons/icon32.png',
@@ -69,8 +71,9 @@ const assertBundleSize = async (filename, rawLimit, gzipLimit) => {
 };
 
 // content script budget accommodates study mode (transcript/chapters/notes)
-// and player-adaptive geometry engines while remaining dependency-free
-await assertBundleSize('contentscript.js', 60_000, 20_000);
+// and player-adaptive geometry engines while remaining dependency-free; the
+// limits were raised in 1.1.0 to leave hotfix room above the trimmed build
+await assertBundleSize('contentscript.js', 70_000, 24_000);
 await assertBundleSize('popup.js', 450_000, 140_000);
 
 const archivePath = path.join(
