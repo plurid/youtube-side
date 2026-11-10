@@ -3,7 +3,7 @@
     "name": "YouTube Side",
     "short_name": "YouTube Side",
     "description": "show YouTube video details and comments beside the video",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "author": "plurid",
     "minimum_chrome_version": "120",
 

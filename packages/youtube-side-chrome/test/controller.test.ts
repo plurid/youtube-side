@@ -90,6 +90,46 @@ describe('YouTubeSideController', () => {
         controller.stop();
     });
 
+    test('keeps the active panel flush with the page edge', async () => {
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+
+        const styles = document.getElementById('youtube-side-styles')?.textContent ?? '';
+        expect(styles).toContain('margin: 0 !important;');
+        expect(styles).toContain('left: var(--youtube-side-offset-x, 0px) !important;');
+        expect(styles).toContain('right: var(--youtube-side-offset-x, 0px) !important;');
+        controller.stop();
+    });
+
+    test('cancels ancestor offsets that shift the fixed panel', async () => {
+        const below = document.getElementById('below') as HTMLElement;
+        below.getBoundingClientRect = () =>
+            ({
+                left: 96,
+                top: 80,
+                right: 596,
+                bottom: 630,
+                width: 500,
+                height: 550,
+            }) as DOMRect;
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+
+        expect(below.style.getPropertyValue('--youtube-side-offset-x')).toBe('-96px');
+        expect(below.style.getPropertyValue('--youtube-side-offset-y')).toBe('-24px');
+
+        controller.setActive(false);
+        await flushLayout();
+        expect(below.style.getPropertyValue('--youtube-side-offset-x')).toBe('');
+        expect(below.style.getPropertyValue('--youtube-side-offset-y')).toBe('');
+        controller.stop();
+    });
+
     test('starts with defaults when storage is unavailable', async () => {
         mock.getMock.mockRejectedValueOnce(new Error('storage unavailable'));
 

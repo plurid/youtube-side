@@ -27,6 +27,8 @@ const HEIGHT_PROPERTY = '--youtube-side-height';
 const BLUR_PROPERTY = '--youtube-side-blur';
 const OPACITY_PROPERTY = '--youtube-side-opacity';
 const CHAT_TOP_PROPERTY = '--youtube-side-chat-top';
+const OFFSET_X_PROPERTY = '--youtube-side-offset-x';
+const OFFSET_Y_PROPERTY = '--youtube-side-offset-y';
 
 // the height of YouTube's masthead; the panel sits flush against it
 const MASTHEAD_HEIGHT = 56;
@@ -49,7 +51,8 @@ const STYLES = `
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"] {
     box-sizing: border-box !important;
     position: fixed !important;
-    top: ${MASTHEAD_HEIGHT}px !important;
+    margin: 0 !important;
+    top: calc(${MASTHEAD_HEIGHT}px + var(${OFFSET_Y_PROPERTY}, 0px)) !important;
     z-index: 2019 !important;
     overflow: auto !important;
     overscroll-behavior: contain;
@@ -59,18 +62,18 @@ const STYLES = `
     height: var(${HEIGHT_PROPERTY});
     min-width: ${WIDTH_MIN}px !important;
     min-height: ${HEIGHT_MIN}px !important;
-    max-width: calc(100vw - 48px) !important;
+    max-width: 100vw !important;
     max-height: calc(100vh - ${MASTHEAD_HEIGHT}px) !important;
     resize: both;
 }
 
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${POSITION_ATTRIBUTE}="left"] {
-    left: 24px !important;
+    left: var(${OFFSET_X_PROPERTY}, 0px) !important;
     right: auto !important;
 }
 
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${POSITION_ATTRIBUTE}="right"] {
-    right: 24px !important;
+    right: var(${OFFSET_X_PROPERTY}, 0px) !important;
     left: auto !important;
     direction: rtl;
 }
@@ -244,6 +247,7 @@ export class YouTubeSideController {
                 below.style.setProperty(HEIGHT_PROPERTY, `${this.options.height}px`);
                 below.style.setProperty(BLUR_PROPERTY, `${this.options.blur}px`);
                 below.style.setProperty(OPACITY_PROPERTY, `${this.options.opacity}%`);
+                this.correctPanelOffset(below);
             } else {
                 below.removeAttribute(ACTIVE_ATTRIBUTE);
                 below.removeAttribute(POSITION_ATTRIBUTE);
@@ -253,6 +257,8 @@ export class YouTubeSideController {
                 below.style.removeProperty(HEIGHT_PROPERTY);
                 below.style.removeProperty(BLUR_PROPERTY);
                 below.style.removeProperty(OPACITY_PROPERTY);
+                below.style.removeProperty(OFFSET_X_PROPERTY);
+                below.style.removeProperty(OFFSET_Y_PROPERTY);
                 below.style.removeProperty('width');
                 below.style.removeProperty('height');
             }
@@ -282,6 +288,24 @@ export class YouTubeSideController {
         if (!this.needsTargets()) {
             this.stopObserver();
         }
+    }
+
+    // a transformed or contained YouTube ancestor becomes the containing
+    // block for the fixed panel and shifts it by that ancestor's offset
+    // (mini-guide, page margins); measure the shift and cancel it
+    private correctPanelOffset(below: HTMLElement): void {
+        below.style.setProperty(OFFSET_X_PROPERTY, '0px');
+        below.style.setProperty(OFFSET_Y_PROPERTY, '0px');
+
+        const rect = below.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) {
+            return;
+        }
+
+        const offsetX = this.options.left ? -rect.left : rect.right - window.innerWidth;
+        const offsetY = MASTHEAD_HEIGHT - rect.top;
+        below.style.setProperty(OFFSET_X_PROPERTY, `${offsetX}px`);
+        below.style.setProperty(OFFSET_Y_PROPERTY, `${offsetY}px`);
     }
 
     private needsTargets(): boolean {
