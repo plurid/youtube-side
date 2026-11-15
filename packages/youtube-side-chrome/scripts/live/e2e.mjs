@@ -176,6 +176,57 @@ try {
     );
     await page.setViewport({ width: 1600, height: 1000 });
 
+    // Alt+M inside the note inserts the current time there, not a bookmark
+    await skipAds(page);
+    await page.evaluate(() => {
+        const textarea = document.querySelector('#youtube-side-study textarea');
+        textarea?.focus();
+        textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+    });
+    await pressShortcut(page, 'KeyM');
+    await sleep(700);
+    const timed = await page.evaluate(() => ({
+        value: document.querySelector('#youtube-side-study textarea')?.value ?? '',
+        jumps: document.querySelectorAll('.youtube-side-jump').length,
+        oneBookmark: /Bookmarks \(1\)/.test(
+            document.getElementById('youtube-side-study-content')?.textContent ?? '',
+        ),
+    }));
+    check(
+        'Alt+M in the note inserts the time, without a bookmark, and lists it as a jump',
+        /^note for the lecture \[\d+:\d\d\] $/.test(timed.value) &&
+            timed.jumps === 1 &&
+            timed.oneBookmark,
+        JSON.stringify(timed),
+    );
+
+    // Alt+M with the panel closed: a bookmark, a status line, and a mark on the progress bar
+    // (shortcuts are ignored while typing, so leave the note first)
+    await page.evaluate(() => document.activeElement?.blur());
+    await pressShortcut(page, 'KeyS');
+    await sleep(600);
+    const mutedBefore = await page.evaluate(
+        () => document.querySelector('#movie_player video')?.muted,
+    );
+    await pressShortcut(page, 'KeyM');
+    await sleep(900);
+    const marked = await page.evaluate(() => ({
+        toast: document.querySelector('#movie_player .youtube-side-toast')?.textContent ?? '',
+        ticks: document.querySelectorAll(
+            '#movie_player .ytp-progress-bar .youtube-side-markers-tick',
+        ).length,
+        muted: document.querySelector('#movie_player video')?.muted,
+        active: document.querySelector('#below')?.getAttribute('data-youtube-side-active'),
+    }));
+    check(
+        'Alt+M with the panel closed bookmarks the moment and marks the progress bar',
+        /^Bookmarked \d+:\d\d$/.test(marked.toast) && marked.ticks === 2 && !marked.active,
+        JSON.stringify(marked),
+    );
+    check("Alt+M leaves YouTube's mute alone", marked.muted === mutedBefore);
+    await pressShortcut(page, 'KeyS');
+    await sleep(600);
+
     // turning study mode off from a study view
     await setOptions(session, { studyEnabled: false });
     await sleep(800);
@@ -287,7 +338,7 @@ try {
             () => document.querySelector('#youtube-side-study textarea')?.value ?? '',
         );
         check(
-            'Quote puts the current line into the note',
+            'Shift+click quotes a transcript line into the note',
             /^> \[\d+:\d\d\] \S/m.test(quoted),
             quoted.slice(0, 80),
         );
@@ -298,28 +349,6 @@ try {
         await clickStudy(page, '#youtube-side-tab-notes');
         await sleep(600);
     }
-
-    // the current time in the note, and its jump list
-    // End moves to the end of a wrapped line, not of the note, so place the caret directly
-    await page.evaluate(() => {
-        const textarea = document.querySelector('#youtube-side-study textarea');
-        textarea?.focus();
-        textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
-    });
-    await pressShortcut(page, 'KeyM');
-    await sleep(700);
-    const timed = await page.evaluate(() => ({
-        value: document.querySelector('#youtube-side-study textarea')?.value ?? '',
-        jumps: document.querySelectorAll('.youtube-side-jump').length,
-        bookmarks: /Bookmarks \(0\)/.test(
-            document.getElementById('youtube-side-study-content')?.textContent ?? '',
-        ),
-    }));
-    check(
-        'Alt+M in the note inserts the time, without a bookmark, and lists it as a jump',
-        /\[\d+:\d\d\] $/.test(timed.value) && timed.jumps >= 1 && timed.bookmarks,
-        JSON.stringify(timed).slice(0, 160),
-    );
 
     // hiding a section of the panel
     await clickStudy(page, '#youtube-side-tab-side');
@@ -335,35 +364,35 @@ try {
     await setOptions(session, { showComments: true });
     await sleep(800);
 
-    // Alt+M with the panel closed: a bookmark, a toast, and a tick on the progress bar
-    await page.click('body').catch(() => undefined);
-    await pressShortcut(page, 'KeyS');
-    await sleep(600);
-    // a mid-roll ad refuses bookmarks on purpose; wait it out
-    await skipAds(page);
-    const mutedBefore = await page.evaluate(
-        () => document.querySelector('#movie_player video')?.muted,
+    // during an ad, Alt+M refuses instead of bookmarking the ad's time
+    const adPlaying = await page.evaluate(() =>
+        document.querySelector('#movie_player')?.classList.contains('ad-showing'),
     );
-    await pressShortcut(page, 'KeyM');
-    await sleep(900);
-    const marked = await page.evaluate(() => ({
-        toast: document.querySelector('#movie_player .youtube-side-toast')?.textContent ?? '',
-        ticks: document.querySelectorAll(
-            '#movie_player .ytp-progress-bar .youtube-side-markers-tick',
-        ).length,
-        muted: document.querySelector('#movie_player video')?.muted,
-        active: document.querySelector('#below')?.getAttribute('data-youtube-side-active'),
-    }));
-    check(
-        'Alt+M with the panel closed bookmarks the moment and marks the progress bar',
-        /^Bookmarked \d+:\d\d$/.test(marked.toast) && marked.ticks === 1 && !marked.active,
-        JSON.stringify(marked),
-    );
-    check("Alt+M leaves YouTube's mute alone", marked.muted === mutedBefore);
+    if (adPlaying) {
+        await page.click('body').catch(() => undefined);
+        await pressShortcut(page, 'KeyM');
+        await sleep(600);
+        const refused = await page.evaluate(() => ({
+            toast: document.querySelector('#movie_player .youtube-side-toast')?.textContent ?? '',
+            ticks: document.querySelectorAll(
+                '#movie_player .ytp-progress-bar .youtube-side-markers-tick',
+            ).length,
+        }));
+        check(
+            'Alt+M during an ad says so and bookmarks nothing',
+            refused.toast === 'Bookmarks are unavailable while an ad plays' && refused.ticks === 0,
+            JSON.stringify(refused),
+        );
+    } else {
+        console.log('SKIP  Alt+M during an ad says so and bookmarks nothing  (no ad this session)');
+    }
 
     // keeping off YouTube's own side panel
     await setOptions(session, { left: false });
-    await pressShortcut(page, 'KeyS');
+    await page.evaluate(() => document.activeElement?.blur());
+    if (!(await panelState(page)).active) {
+        await pressShortcut(page, 'KeyS');
+    }
     await sleep(600);
     await page.evaluate(() =>
         document.querySelector('ytd-video-description-transcript-section-renderer button')?.click(),
