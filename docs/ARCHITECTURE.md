@@ -83,7 +83,7 @@ Before the geometry is resolved, `resolveSide()` checks YouTube's own side panel
 
 `detectWatchLayout()` reports `classic` when `#below` holds the description or the comments and `panels` when only the title block is there (YouTube's experimental layout). The layout is written to `data-youtube-side-layout`, reported to the popup, and in `panels` the Side view explains where the description and comments went.
 
-Other pieces of the pass: the right-side panel uses `direction: rtl` so the native resize handle faces the page; the live chat container is positioned against the panel; the description, the comments, and the live chat can each be hidden while the panel is shown (`data-youtube-side-hide` and the chat's `data-youtube-side-hidden`), and the recommendations column can be hidden at any time; and in **auto invert** mode a sampler draws the video region behind the panel into a 32×32 canvas every 700 ms and inverts the panel's colors above 0.6 luminance, reverting below 0.45 after two agreeing samples. Dragging the panel's resize handle is committed to the width and height options after 200 ms, together with `customSize`, so a player-anchored panel keeps that size across reloads; reset clears it.
+Other pieces of the pass: the right-side panel uses `direction: rtl` so the native resize handle faces the page; the live chat container is positioned against the panel; the description, the comments, and the live chat can each be hidden while the panel is shown (`data-youtube-side-hide` and the chat's `data-youtube-side-hidden`), and the recommendations column can be hidden at any time; and in **auto invert** mode a sampler draws the video region behind the panel into a 32×32 canvas every 700 ms and inverts the panel's colors above 0.6 luminance, reverting below 0.45 after two agreeing samples. When YouTube Darkview is active, the sampler judges what the viewer sees: it lays Darkview's overlay canvas (`#youtube-darkview-overlay`, which draws only the pixels it inverts) over the sample, and with Darkview's whole-video filter (`video[data-youtube-darkview="active"]`) it uses `(1 - luminance) × intensity`. Dragging the panel's resize handle is committed to the width and height options after 200 ms, together with `customSize`, so a player-anchored panel keeps that size across reloads; reset clears it.
 
 Colors come from the panel's own light and dark palettes, chosen by YouTube's `html[dark]` attribute; YouTube no longer exposes its `--yt-spec-*` color variables on the page.
 
@@ -195,6 +195,7 @@ Verified on live watch pages on 2026-11-10. When something breaks after a YouTub
 | YouTube's player shortcuts listen on the page, not only on the player | keeping panel keys local | `studyPanel.ts` |
 | the theme is `html[dark]`; YouTube's `--yt-spec-*` color variables no longer exist on the page | the panel's own light and dark palettes | `styles.ts` |
 | Trusted Types are enforced | text-only rendering | everywhere |
+| YouTube Darkview's `#youtube-darkview-overlay` canvas and `video[data-youtube-darkview]` filter (with `--youtube-darkview-intensity`) | auto invert judging the darkened picture | `page.ts` |
 
 ## Building, testing, and releasing
 

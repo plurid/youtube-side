@@ -214,6 +214,82 @@ describe('YouTubeSideController', () => {
         controller.stop();
     });
 
+    test('auto mode judges the picture Darkview shows, not the raw video', async () => {
+        mock.data[OPTIONS_KEY] = {
+            version: OPTIONS_VERSION,
+            values: { ...DEFAULT_OPTIONS, invertText: 'auto' },
+        };
+
+        // a bright video; the sample reads whatever was drawn last over it
+        let drawnLevel = 240;
+        const fakeContext = {
+            canvas: { width: 0, height: 0 },
+            drawImage: jest.fn((source: unknown) => {
+                drawnLevel = source instanceof HTMLCanvasElement ? 12 : 240;
+            }),
+            getImageData: jest.fn(() => ({
+                data: new Uint8ClampedArray(32 * 32 * 4).fill(drawnLevel),
+            })),
+        };
+        const contextSpy = jest
+            .spyOn(HTMLCanvasElement.prototype, 'getContext')
+            .mockReturnValue(fakeContext as unknown as RenderingContext);
+        const rect = (left: number, top: number, right: number, bottom: number) =>
+            ({ left, top, right, bottom, width: right - left, height: bottom - top }) as DOMRect;
+
+        const video = document.createElement('video');
+        Object.defineProperty(video, 'videoWidth', { configurable: true, value: 1280 });
+        Object.defineProperty(video, 'videoHeight', { configurable: true, value: 720 });
+        Object.defineProperty(video, 'readyState', { configurable: true, value: 2 });
+        video.getBoundingClientRect = () => rect(0, 0, 800, 450);
+        document.querySelector('ytd-app')?.append(video);
+        const below = document.getElementById('below') as HTMLElement;
+        below.getBoundingClientRect = () => rect(24, 56, 524, 606);
+
+        const controller = new YouTubeSideController();
+        await controller.start();
+        controller.setActive(true);
+        await flushLayout();
+        const tick = () =>
+            (
+                controller as unknown as { samplePanelBrightness: () => void }
+            ).samplePanelBrightness();
+
+        // no Darkview: the bright video inverts the panel text
+        tick();
+        tick();
+        await flushLayout();
+        expect(below.dataset.youtubeSideInverted).toBe('true');
+
+        // Darkview's overlay darkens the area behind the panel
+        const overlay = document.createElement('canvas');
+        overlay.id = 'youtube-darkview-overlay';
+        overlay.width = 1600;
+        overlay.height = 900;
+        overlay.style.visibility = 'visible';
+        overlay.getBoundingClientRect = () => rect(0, 0, 800, 450);
+        document.querySelector('ytd-app')?.append(overlay);
+        tick();
+        tick();
+        await flushLayout();
+        expect(below.dataset.youtubeSideInverted).toBe('false');
+        // the overlay is read in its own (device) pixels for the panel's part of the picture
+        const [, sx, sy, sw, sh] = fakeContext.drawImage.mock.calls.at(-1) as number[];
+        expect([sx, sy, sw, sh]).toEqual([48, 112, 1000, 788]);
+
+        // Darkview's whole-video filter: bright pixels are shown dark
+        overlay.remove();
+        video.setAttribute('data-youtube-darkview', 'active');
+        video.style.setProperty('--youtube-darkview-intensity', '0.9');
+        tick();
+        tick();
+        await flushLayout();
+        expect(below.dataset.youtubeSideInverted).toBe('false');
+
+        controller.stop();
+        contextSpy.mockRestore();
+    });
+
     test('auto mode inverts from the brightness behind the panel', async () => {
         mock.data[OPTIONS_KEY] = {
             version: OPTIONS_VERSION,

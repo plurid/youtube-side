@@ -115,6 +115,35 @@ export const readVideoTitle = (root: Document = document): string => {
     return (root.title || '').replace(/\s+-\s+YouTube$/, '').trim();
 };
 
+// YouTube Darkview (a sibling extension) darkens light regions of the video,
+// either with this overlay canvas, which draws only the pixels it inverts,
+// or with a whole-video CSS filter marked by this attribute. Side's automatic
+// text inversion must judge what the viewer sees, not the raw video.
+const DARKVIEW_OVERLAY_ID = 'youtube-darkview-overlay';
+const DARKVIEW_FILTER_ATTRIBUTE = 'data-youtube-darkview';
+const DARKVIEW_INTENSITY_PROPERTY = '--youtube-darkview-intensity';
+
+/** Darkview's overlay while it shows over the video, or null. */
+export const getDarkviewOverlay = (root: Document = document): HTMLCanvasElement | null => {
+    const overlay = root.getElementById(DARKVIEW_OVERLAY_ID);
+    return overlay instanceof HTMLCanvasElement &&
+        overlay.isConnected &&
+        overlay.style.visibility === 'visible' &&
+        overlay.width > 0 &&
+        overlay.height > 0
+        ? overlay
+        : null;
+};
+
+/** The brightness Darkview's whole-video filter keeps (0.65 to 1), or null when it is off. */
+export const darkviewFilterIntensity = (video: HTMLVideoElement): number | null => {
+    if (video.getAttribute(DARKVIEW_FILTER_ATTRIBUTE) !== 'active') {
+        return null;
+    }
+    const value = Number.parseFloat(video.style.getPropertyValue(DARKVIEW_INTENSITY_PROPERTY));
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.9;
+};
+
 export const canonicalVideoUrl = (videoId: string): string =>
     `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
 

@@ -11,8 +11,10 @@ import {
 } from '~data/options';
 import {
     APP_MODE_ATTRIBUTES,
+    darkviewFilterIntensity,
     detectWatchLayout,
     getApp,
+    getDarkviewOverlay,
     getEngagementPanels,
     getMainVideo,
     getMoviePlayer,
@@ -726,6 +728,32 @@ export class YouTubeSideController {
                 SAMPLE_SIZE,
             );
 
+            // Darkview's overlay draws only the pixels it inverts, so laying it
+            // over the sample gives exactly what the viewer sees behind the panel
+            const overlay = getDarkviewOverlay();
+            if (overlay) {
+                const area = overlay.getBoundingClientRect();
+                const x0 = Math.max(left, area.left);
+                const x1 = Math.min(right, area.right);
+                const y0 = Math.max(top, area.top);
+                const y1 = Math.min(bottom, area.bottom);
+                if (x1 > x0 && y1 > y0 && area.width > 0 && area.height > 0) {
+                    const toOverlayX = overlay.width / area.width;
+                    const toOverlayY = overlay.height / area.height;
+                    context.drawImage(
+                        overlay,
+                        (x0 - area.left) * toOverlayX,
+                        (y0 - area.top) * toOverlayY,
+                        (x1 - x0) * toOverlayX,
+                        (y1 - y0) * toOverlayY,
+                        ((x0 - left) / (right - left)) * SAMPLE_SIZE,
+                        ((y0 - top) / (bottom - top)) * SAMPLE_SIZE,
+                        ((x1 - x0) / (right - left)) * SAMPLE_SIZE,
+                        ((y1 - y0) / (bottom - top)) * SAMPLE_SIZE,
+                    );
+                }
+            }
+
             const pixels = context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data;
             let total = 0;
             for (let index = 0; index < pixels.length; index += 4) {
@@ -735,6 +763,12 @@ export class YouTubeSideController {
                     0.0722 * (pixels[index + 2] ?? 0);
             }
             luminance = total / (pixels.length / 4) / 255;
+
+            // Darkview's whole-video filter inverts the picture and dims it to its intensity
+            const filterIntensity = darkviewFilterIntensity(video);
+            if (filterIntensity !== null) {
+                luminance = (1 - luminance) * filterIntensity;
+            }
         } catch (error) {
             this.samplerBroken = true;
             log('Could not sample the video for automatic inversion.', error);

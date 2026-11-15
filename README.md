@@ -19,7 +19,7 @@ Press **Alt/Option + S** on a YouTube page to lift the details panel beside the 
 - **Alt/Option + T** cycles the study views (Side, Transcript, Chapters, Notes) while the panel is open; the arrow keys also move between the view tabs.
 - **Alt/Option + M** bookmarks the current moment, with the panel open or closed; a short message over the player confirms it. While you type in a video's note, it inserts the current time instead.
 - The popup's **side position** switch toggles the layout for the current tab, same as Alt/Option + S; the popup talks to the YouTube page over extension messaging, so no extra permission is needed.
-- The popup's **invert text** control inverts the panel's text and background colors while keeping avatars and thumbnails intact - useful when a transparent panel sits over a bright video. In **auto** mode the extension samples the video region behind the panel about once a second and inverts only while that area is bright, with hysteresis so scene cuts do not cause flicker. Frames never leave the page.
+- The popup's **invert text** control inverts the panel's text and background colors while keeping avatars and thumbnails intact - useful when a transparent panel sits over a bright video. In **auto** mode the extension samples the video region behind the panel about once a second and inverts only while that area is bright, with hysteresis so scene cuts do not cause flicker. With YouTube Darkview active, it judges the darkened picture the viewer actually sees. Frames never leave the page.
 
 ### Adaptive Layout
 
