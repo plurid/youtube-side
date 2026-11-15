@@ -111,8 +111,15 @@ export const normalizeStudyData = (value: unknown): StudyData => {
     const videoEntries: [string, VideoStudy][] = [];
 
     for (const [id, rawVideo] of Object.entries(videosInput)) {
-        if (typeof id === 'string' && id.trim().length > 0) {
-            videoEntries.push([id.trim(), normalizeVideoStudy(rawVideo)]);
+        if (typeof id !== 'string' || id.trim().length === 0) {
+            continue;
+        }
+
+        // a cleared video holds nothing to keep, but would still count toward the cap
+        // and could evict a video that has real notes
+        const study = normalizeVideoStudy(rawVideo);
+        if (study.bookmarks.length > 0 || study.note.trim().length > 0) {
+            videoEntries.push([id.trim(), study]);
         }
     }
 

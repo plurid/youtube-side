@@ -927,9 +927,24 @@ export class StudyPanel {
         field.placeholder = placeholder;
         field.maxLength = maxLength;
         field.setAttribute('aria-label', label);
-        field.addEventListener('change', () => {
-            commit(field.value);
+
+        // saving while typing keeps an edit that never blurs, for example when
+        // autoplay moves to the next video and the field is removed mid-edit
+        let committed = value;
+        let timer: number | undefined;
+        const flush = () => {
+            window.clearTimeout(timer);
+            timer = undefined;
+            if (field.value !== committed) {
+                committed = field.value;
+                commit(field.value);
+            }
+        };
+        field.addEventListener('input', () => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(flush, NOTE_SAVE_DELAY);
         });
+        field.addEventListener('change', flush);
         return field;
     }
 

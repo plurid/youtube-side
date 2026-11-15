@@ -17,6 +17,8 @@ import {
     BLUR_MIN,
     type ChannelRule,
     DEFAULT_OPTIONS,
+    HEIGHT_MAX,
+    HEIGHT_MIN,
     INVERT_TEXT_MODES,
     type InvertTextMode,
     LAYOUT_ANCHORS,
@@ -32,6 +34,8 @@ import {
     type StudyAutoOpen,
     subscribeOptions,
     updateOptions,
+    WIDTH_MAX,
+    WIDTH_MIN,
 } from '~data/options';
 
 import {
@@ -44,6 +48,62 @@ import {
 } from './styled';
 
 const SAVE_DELAY = 200;
+
+interface DimensionFieldProperties {
+    name: string;
+    value: number;
+    min: number;
+    max: number;
+    atChange: (value: number) => void;
+}
+
+/**
+ * The input is controlled, so clamping every keystroke would turn the "8" on
+ * the way to "800" into the minimum. A draft keeps the text as typed; values
+ * already in bounds apply live, anything else is clamped on blur or Enter.
+ */
+const DimensionField = ({ name, value, min, max, atChange }: DimensionFieldProperties) => {
+    const [draft, setDraft] = useState<string | null>(null);
+
+    const commit = () => {
+        if (draft === null) {
+            return;
+        }
+
+        const parsed = Number.parseInt(draft, 10);
+        if (Number.isFinite(parsed)) {
+            atChange(Math.min(max, Math.max(min, parsed)));
+        }
+        setDraft(null);
+    };
+
+    return (
+        <InputLine
+            name={name}
+            text={draft ?? String(value)}
+            atChange={(event) => {
+                const text = event.target.value;
+                setDraft(text);
+
+                const parsed = Number.parseInt(text, 10);
+                if (Number.isFinite(parsed) && parsed >= min && parsed <= max) {
+                    atChange(parsed);
+                }
+            }}
+            atKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                    commit();
+                }
+            }}
+            theme={dewiki}
+            textline={{
+                type: 'number',
+                atBlur: commit,
+            }}
+            style={inputStyle}
+        />
+    );
+};
 
 const sendToActiveTab = async (request: SideRequest): Promise<SideStatus> => {
     const tab = await getActiveTab();
@@ -309,36 +369,24 @@ const Popup = () => {
                 style={inputStyle}
             />
 
-            <InputLine
+            <DimensionField
                 name="width"
-                text={String(options.width)}
-                atChange={(event) => {
-                    const width = Number.parseInt(event.target.value, 10);
-                    if (Number.isFinite(width)) {
-                        changeOption({ width }, true);
-                    }
+                value={options.width}
+                min={WIDTH_MIN}
+                max={WIDTH_MAX}
+                atChange={(width) => {
+                    changeOption({ width }, true);
                 }}
-                theme={dewiki}
-                textline={{
-                    type: 'number',
-                }}
-                style={inputStyle}
             />
 
-            <InputLine
+            <DimensionField
                 name="height"
-                text={String(options.height)}
-                atChange={(event) => {
-                    const height = Number.parseInt(event.target.value, 10);
-                    if (Number.isFinite(height)) {
-                        changeOption({ height }, true);
-                    }
+                value={options.height}
+                min={HEIGHT_MIN}
+                max={HEIGHT_MAX}
+                atChange={(height) => {
+                    changeOption({ height }, true);
                 }}
-                theme={dewiki}
-                textline={{
-                    type: 'number',
-                }}
-                style={inputStyle}
             />
 
             <InputSwitch

@@ -152,7 +152,7 @@ The status is `{ active, available, effectiveVisible, suspendReason, context }`.
 
 Older shapes are migrated on read: unversioned values and version 1 (boolean `blurred` becomes blur 5 or 0, boolean `invertText` becomes `on`), and version 2 (all version 3 fields are additions with defaults). Downgrading to a build that predates version 3 resets settings to defaults.
 
-**`youtubeSideStudy`**, stored as `{ version: 1, videos: { [videoId]: { bookmarks, note, updatedAt } } }`: at most 50 videos (least recently updated evicted), 200 bookmarks per video, labels up to 200 characters, bookmark notes up to 2,000, video notes up to 10,000.
+**`youtubeSideStudy`**, stored as `{ version: 1, videos: { [videoId]: { bookmarks, note, updatedAt } } }`: at most 50 videos (least recently updated evicted; a video whose note and bookmarks are all cleared is removed, so it never takes a slot), 200 bookmarks per video, labels up to 200 characters, bookmark notes up to 2,000, video notes up to 10,000.
 
 ## YouTube facts the code relies on
 

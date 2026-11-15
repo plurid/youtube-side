@@ -451,6 +451,27 @@ describe('StudyPanel', () => {
         expect(video.currentTime).toBe(65);
     });
 
+    it('saves a bookmark edit while it is typed, before the field ever loses focus', async () => {
+        const panel = new StudyPanel();
+        panel.mount(below, 'vidLabel01');
+        bookmarkButton().click();
+        await wait();
+        panel.setView('notes');
+        await wait();
+
+        // autoplay moving to the next video removes the field without a blur or change event
+        const label = query<HTMLInputElement>('input[aria-label="Bookmark label"]');
+        label.value = 'Typed, never blurred';
+        label.dispatchEvent(new Event('input'));
+        await panel.handleVideoChange('vidLabel02');
+        await wait(600);
+
+        expect(storedStudy(mock)?.videos.vidLabel01?.bookmarks[0]?.label).toBe(
+            'Typed, never blurred',
+        );
+        expect(mock.setMock).toHaveBeenCalledTimes(2);
+    });
+
     it('saves a note to the video it was typed on, even after navigating away', async () => {
         const panel = new StudyPanel();
         panel.mount(below, 'vidTyped01');

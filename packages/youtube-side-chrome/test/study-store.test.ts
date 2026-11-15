@@ -107,6 +107,19 @@ describe('studyStore module', () => {
         expect(study.note).toBe('Comprehensive notes.');
     });
 
+    it('forgets a video once its note and bookmarks are cleared', async () => {
+        await setVideoNote('kept', 'Keep me');
+        await setVideoNote('cleared', 'Temporary');
+        await setVideoNote('cleared', '');
+
+        await addBookmark('unmarked', 1000);
+        const [bookmark] = (await loadVideoStudy('unmarked')).bookmarks;
+        await removeBookmark('unmarked', bookmark?.createdAt ?? -1);
+
+        expect(Object.keys((await loadStudyData()).videos)).toEqual(['kept']);
+        expect(await loadVideoStudy('cleared')).toMatchObject({ bookmarks: [], note: '' });
+    });
+
     it('reports failed writes and keeps the queue working', async () => {
         const mock = createChromeMock();
         mock.setMock.mockRejectedValueOnce(new Error('Storage quota exceeded'));

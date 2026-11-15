@@ -41,7 +41,7 @@ The panel can be resized directly by dragging its bottom corner (always the corn
 
 ## Scope and permissions
 
-The content script runs only on YouTube. The manifest requests only the `storage` permission; it has no background service, remote code, analytics, or network permission. The shortcuts are handled inside each YouTube page, so one tab cannot toggle another, and they are ignored while typing in the search box, comments, or any other text field.
+The content script runs only on www.youtube.com. The manifest requests only the `storage` permission; it has no background service, remote code, analytics, or network permission. The shortcuts are handled inside each YouTube page, so one tab cannot toggle another, and they are ignored while typing in the search box, comments, or any other text field.
 
 The only network activity is in the Transcript view, and only after you open it: the page may request a caption file from YouTube itself (the same request YouTube's player makes), or open YouTube's own transcript panel, which loads the transcript the way YouTube always does. Transcripts are kept in memory for the last three videos and are never stored or exported. Bookmarks and notes stay in local extension storage.
 

@@ -1,5 +1,6 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { DEFAULT_OPTIONS, OPTIONS_KEY, OPTIONS_VERSION, type Options } from '~data/options';
 
@@ -25,16 +26,26 @@ jest.mock('@plurid/plurid-ui-components-react', () => ({
     ),
     InputLine: ({
         atChange,
+        atKeyDown,
         name,
         text,
         textline,
     }: {
         atChange: (event: { target: { value: string } }) => void;
+        atKeyDown?: (event: { key: string }) => void;
         name: string;
         text: string;
-        textline?: { type: string };
+        textline?: { type: string; atBlur?: () => void };
     }) => (
-        <input aria-label={name} type={textline?.type ?? 'text'} value={text} onChange={atChange} />
+        // controlled like the real Textline: `value` is always the `text` property
+        <input
+            aria-label={name}
+            type={textline?.type ?? 'text'}
+            value={text}
+            onChange={atChange}
+            onKeyDown={atKeyDown}
+            onBlur={textline?.atBlur}
+        />
     ),
     LinkButton: ({ atClick, text }: { atClick: () => void; text: string }) => (
         <button type="button" onClick={atClick}>
@@ -391,6 +402,55 @@ describe('Popup', () => {
             });
         });
         expect(mock.setMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('lets a dimension be typed key by key and clamps it only when committed', async () => {
+        const user = userEvent.setup();
+        const mock = createChromeMock({
+            [OPTIONS_KEY]: {
+                version: OPTIONS_VERSION,
+                values: DEFAULT_OPTIONS,
+            },
+        });
+
+        render(<Popup />);
+
+        const width = await screen.findByLabelText('width');
+        await user.clear(width);
+        expect(width).toHaveValue(null);
+        await user.type(width, '800');
+        expect(width).toHaveValue(800);
+
+        await waitFor(() => {
+            expect(mock.data[OPTIONS_KEY]).toEqual({
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, width: 800 },
+            });
+        });
+
+        // a partial value stays as typed until blur, then snaps into bounds
+        await user.clear(width);
+        await user.type(width, '9');
+        expect(width).toHaveValue(9);
+        await user.tab();
+        expect(width).toHaveValue(320);
+
+        const height = screen.getByLabelText('height');
+        await user.clear(height);
+        await user.type(height, '5000{Enter}');
+        expect(height).toHaveValue(1200);
+
+        await waitFor(() => {
+            expect(mock.data[OPTIONS_KEY]).toEqual({
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, width: 320, height: 1200 },
+            });
+        });
+
+        // leaving an emptied field restores the stored value
+        await user.clear(height);
+        await user.tab();
+        expect(height).toHaveValue(1200);
     });
 
     test('resets pending edits and all settings through the options module', async () => {

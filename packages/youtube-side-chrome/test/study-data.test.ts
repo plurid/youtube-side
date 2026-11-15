@@ -100,6 +100,22 @@ describe('study data normalization and export', () => {
             expect(normalized.videos.vid_59).toBeDefined();
         });
 
+        it('drops empty videos so they never take the place of real notes', () => {
+            const videos: Record<string, VideoStudy> = {};
+            for (let i = 0; i < MAX_STORED_VIDEOS; i++) {
+                videos[`vid_${i}`] = { bookmarks: [], note: `Note ${i}`, updatedAt: 1000 + i };
+            }
+            // newer than every real entry, so they would win the eviction order
+            videos.cleared = { bookmarks: [], note: '', updatedAt: 9000 };
+            videos.blank = { bookmarks: [], note: '  \n ', updatedAt: 9001 };
+
+            const normalized = normalizeStudyData({ videos });
+            expect(Object.keys(normalized.videos)).toHaveLength(MAX_STORED_VIDEOS);
+            expect(normalized.videos.cleared).toBeUndefined();
+            expect(normalized.videos.blank).toBeUndefined();
+            expect(normalized.videos.vid_0?.note).toBe('Note 0');
+        });
+
         it('returns empty study data on invalid input', () => {
             expect(normalizeStudyData(null)).toEqual({ version: 1, videos: {} });
             expect(normalizeStudyData('invalid')).toEqual({ version: 1, videos: {} });

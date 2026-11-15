@@ -4,7 +4,7 @@ Everything the developer dashboard asks for when publishing YouTube Side 1.1.0. 
 
 ## Package
 
-Upload `packages/youtube-side-chrome/distribution-zip/youtube-side-v1.1.0.zip`, built with `pnpm package`. The store currently has 1.0.5, so 1.1.0 is a valid update. Permissions are unchanged (`storage`, plus the YouTube content script), so existing users get the update without a new permission prompt.
+Upload `packages/youtube-side-chrome/distribution-zip/youtube-side-v1.1.0.zip`, built with `pnpm package`. The store currently has 1.0.5, so 1.1.0 is a valid update. The API permission is unchanged (`storage`), and the content script now matches only `https://www.youtube.com/*` instead of every youtube.com subdomain (YouTube Music and Studio have no watch page for it to work on). A narrower host permission never prompts, so existing users get the update without a new permission prompt.
 
 ## Summary
 
@@ -72,10 +72,10 @@ YouTube Side makes a YouTube video's supporting information easier to use while 
 Saves the user's settings (panel size, side, background, and study options) and the bookmarks and notes they write, locally in the browser.
 ```
 
-**Host permission justification (content script on `https://*.youtube.com/*`):**
+**Host permission justification (content script on `https://www.youtube.com/*`):**
 
 ```text
-The extension rearranges the YouTube watch page to show the video's details beside the player and adds the study panel. It runs only on YouTube pages and reads only what YouTube shows there.
+The extension rearranges the YouTube watch page to show the video's details beside the player and adds the study panel. It runs only on www.youtube.com and reads only what YouTube shows there.
 ```
 
 **Remote code:** No. All code ships in the package; the extension loads no remote scripts.
