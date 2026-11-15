@@ -31,9 +31,22 @@ export const StyledNotice = styled.div`
     text-align: center;
 `;
 
+// starts the group under the settings rows (the shortcut hint and the library link)
+// with the same divider the sections use
 export const StyledHint = styled.div`
+    margin-top: 0.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     font-size: 0.8rem;
     opacity: 0.8;
+`;
+
+/** The same thin line that starts each section, between groups at the top level. */
+export const StyledDivider = styled.hr`
+    width: 250px;
+    margin: 0.25rem 0;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 export const StyledSection = styled.div`
@@ -73,5 +86,11 @@ export const StyledSliders = styled.div`
 
 export const inputStyle = {
     width: '250px',
+};
+
+// the UI kit's switch adds a 2.2rem top margin of its own; the grids space the rows instead
+export const switchStyle = {
+    width: '250px',
+    marginTop: 0,
 };
 // #endregion module

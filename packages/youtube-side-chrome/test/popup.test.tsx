@@ -543,7 +543,7 @@ describe('Popup', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'comments' }));
         fireEvent.click(screen.getByRole('button', { name: 'live chat' }));
         fireEvent.click(screen.getByRole('button', { name: 'description' }));
-        fireEvent.click(screen.getByRole('button', { name: 'bookmarks on the progress bar' }));
+        fireEvent.click(screen.getByRole('button', { name: 'bookmark markers' }));
 
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({

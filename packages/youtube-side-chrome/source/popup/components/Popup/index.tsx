@@ -40,12 +40,14 @@ import {
 
 import {
     inputStyle,
+    StyledDivider,
     StyledHint,
     StyledNotice,
     StyledOptionRow,
     StyledPopup,
     StyledSection,
     StyledSliders,
+    switchStyle,
 } from './styled';
 
 const SAVE_DELAY = 200;
@@ -309,9 +311,11 @@ const Popup = () => {
                     }}
                     theme={dewiki}
                     compact={true}
-                    style={inputStyle}
+                    style={switchStyle}
                 />
             )}
+
+            <StyledDivider />
 
             <InputSwitch
                 name="background [⌥ + B]"
@@ -322,7 +326,7 @@ const Popup = () => {
                     });
                 }}
                 theme={dewiki}
-                style={inputStyle}
+                style={switchStyle}
             />
 
             {background && (
@@ -383,7 +387,7 @@ const Popup = () => {
                     changeOption({ left: !options.left });
                 }}
                 theme={dewiki}
-                style={inputStyle}
+                style={switchStyle}
             />
 
             <DimensionField
@@ -413,7 +417,7 @@ const Popup = () => {
                     changeOption({ recommendations: !options.recommendations });
                 }}
                 theme={dewiki}
-                style={inputStyle}
+                style={switchStyle}
             />
 
             <StyledSection>
@@ -426,7 +430,7 @@ const Popup = () => {
                         changeOption({ showDescription: !options.showDescription });
                     }}
                     theme={dewiki}
-                    style={inputStyle}
+                    style={switchStyle}
                 />
 
                 <InputSwitch
@@ -436,7 +440,7 @@ const Popup = () => {
                         changeOption({ showComments: !options.showComments });
                     }}
                     theme={dewiki}
-                    style={inputStyle}
+                    style={switchStyle}
                 />
 
                 <InputSwitch
@@ -446,7 +450,7 @@ const Popup = () => {
                         changeOption({ showChat: !options.showChat });
                     }}
                     theme={dewiki}
-                    style={inputStyle}
+                    style={switchStyle}
                 />
             </StyledSection>
 
@@ -515,7 +519,7 @@ const Popup = () => {
                         changeOption({ studyEnabled: !options.studyEnabled });
                     }}
                     theme={dewiki}
-                    style={inputStyle}
+                    style={switchStyle}
                 />
 
                 {options.studyEnabled && (
@@ -527,17 +531,17 @@ const Popup = () => {
                                 changeOption({ studyFollow: !options.studyFollow });
                             }}
                             theme={dewiki}
-                            style={inputStyle}
+                            style={switchStyle}
                         />
 
                         <InputSwitch
-                            name="bookmarks on the progress bar"
+                            name="bookmark markers"
                             checked={options.bookmarkMarkers}
                             atChange={() => {
                                 changeOption({ bookmarkMarkers: !options.bookmarkMarkers });
                             }}
                             theme={dewiki}
-                            style={inputStyle}
+                            style={switchStyle}
                         />
 
                         <StyledOptionRow>
@@ -557,7 +561,8 @@ const Popup = () => {
                             />
                         </StyledOptionRow>
                         <StyledHint>
-                            ⌥ + M bookmarks the moment, or inserts the time in a note
+                            <div>⌥ + M bookmarks the moment,</div>
+                            <div>or inserts the time in a note</div>
                         </StyledHint>
                     </>
                 )}
@@ -570,6 +575,8 @@ const Popup = () => {
                 />
             </StyledSection>
 
+            <StyledDivider />
+
             <div>
                 <LinkButton
                     text="reset"
@@ -577,9 +584,6 @@ const Popup = () => {
                         void reset();
                     }}
                     theme={dewiki}
-                    style={{
-                        marginTop: '1.5rem',
-                    }}
                     inline={true}
                 />
             </div>
