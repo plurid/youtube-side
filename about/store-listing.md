@@ -4,7 +4,7 @@ Everything the developer dashboard asks for when publishing YouTube Side 1.1.0. 
 
 ## Package
 
-Upload `packages/youtube-side-chrome/distribution-zip/youtube-side-v1.1.0.zip`, built with `pnpm package`. The store currently has 1.0.5, so 1.1.0 is a valid update. The API permission is unchanged (`storage`), and the content script now matches only `https://www.youtube.com/*` instead of every youtube.com subdomain (YouTube Music and Studio have no watch page for it to work on). A narrower host permission never prompts, so existing users get the update without a new permission prompt.
+Upload `packages/youtube-side-chrome/distribution-zip/youtube-side-v1.1.0.zip`, built with `pnpm package`. The store currently has 1.0.5, so 1.1.0 is a valid update. Permissions compared with 1.0.5: `unlimitedStorage` is added, so notes are never limited by Chrome's 10 MB extension storage quota; it has no permission warning, so it does not prompt. The content script now matches only `https://www.youtube.com/*` instead of every youtube.com subdomain (YouTube Music and Studio have no watch page for it to work on); a narrower host permission never prompts either. Existing users get the update without a permission prompt.
 
 ## Summary
 
@@ -25,22 +25,28 @@ Shortcuts (Alt on Windows and Linux, Option on Mac):
 • Alt+L: move the panel to the left or right edge
 • Alt+R: show or hide the recommendations column
 • Alt+T: switch between the Side, Transcript, Chapters, and Notes views
+• Alt+M: bookmark the moment, even with the panel closed (in a note, it inserts the current time)
 
 Study mode
 • Transcript: search it, follow along as the video plays, and click any line to jump there
 • Chapters: see the video's chapters with the current one highlighted, and jump to any of them
-• Notes: bookmark moments with one click, add labels and notes, and export them as Markdown
+• Notes: bookmark moments with one click, add labels and notes, insert timestamps that jump back to the moment, and export them as Markdown
+• Quote: add a transcript line to your notes with its time
+• Bookmarks appear as marks on YouTube's progress bar
+• Notes library: every video you took notes on in one page, searchable, with Markdown export and backup files you can restore anywhere
 
 Layout
 • Resize the panel by dragging its corner; the size is remembered
 • Anchor the panel to the edge of the window or to the video player
 • Steps aside in fullscreen and the miniplayer, and comes back when you return
-• Optionally opens by itself for live streams, long videos, or channels you choose
+• Optionally opens by itself for live streams, long videos, or channels you choose, and closes again on videos that don't match
+• Moves out of the way of YouTube's own side panels
+• Show or hide the description, comments, and live chat in the panel
 • Can invert its text automatically when the video behind a transparent panel is bright
 • Follows YouTube's light and dark themes
 
 Privacy
-YouTube Side has no analytics and sends nothing to its developer. Your settings, bookmarks, and notes stay in your browser's extension storage. Transcripts come from YouTube itself, only when you open the Transcript view, and are never saved.
+YouTube Side has no analytics and sends nothing to its developer. Your settings, bookmarks, and notes stay in your browser's extension storage, and backups are files you save yourself. Transcripts come from YouTube itself, only when you open the Transcript view, and are never saved; only lines you quote into your notes are kept.
 ```
 
 ## Screenshots
@@ -63,13 +69,19 @@ Refreshed, in `about/images/`: `promo-1.png` (small promo tile, 440×280) and `p
 **Single purpose:**
 
 ```text
-YouTube Side makes a YouTube video's supporting information easier to use while watching: it shows the description, comments, live chat, transcript, chapters, and the user's own notes in a panel beside the video.
+YouTube Side makes a YouTube video's supporting information easier to use while watching: it shows the description, comments, live chat, transcript, chapters, and the user's own notes in a panel beside the video, and keeps those notes in a local library.
 ```
 
 **Permission justification, `storage`:**
 
 ```text
 Saves the user's settings (panel size, side, background, and study options) and the bookmarks and notes they write, locally in the browser.
+```
+
+**Permission justification, `unlimitedStorage`:**
+
+```text
+Bookmarks and notes are kept per video, locally, for as many videos as the user studies. This lifts the browser's 10 MB extension storage quota so older notes are never lost to it. Nothing leaves the browser.
 ```
 
 **Host permission justification (content script on `https://www.youtube.com/*`):**
@@ -80,7 +92,7 @@ The extension rearranges the YouTube watch page to show the video's details besi
 
 **Remote code:** No. All code ships in the package; the extension loads no remote scripts.
 
-**Data usage:** the current declaration ("will not collect or use your data") stays accurate. Nothing is sent to the developer or any third party. Settings, bookmarks, and notes stay in local extension storage, and transcripts are read from YouTube's own page while the user has the Transcript view open, kept in memory for at most three videos, and never stored or transmitted. Keep the three certifications checked: not sold to third parties, not used for purposes unrelated to the item's single purpose, and not used to determine creditworthiness.
+**Data usage:** the current declaration ("will not collect or use your data") stays accurate. Nothing is sent to the developer or any third party. Settings, bookmarks, notes, and the video titles and channel names saved with them stay in local extension storage; backups are files the user saves. Transcripts are read from YouTube's own page while the user has the Transcript view open, kept in memory for at most three videos, and never stored or transmitted, except lines the user quotes into their own notes. Keep the three certifications checked: not sold to third parties, not used for purposes unrelated to the item's single purpose, and not used to determine creditworthiness.
 
 ## Before submitting
 

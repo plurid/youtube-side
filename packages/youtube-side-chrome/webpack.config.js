@@ -14,6 +14,7 @@ module.exports = (_environment, arguments_) => {
         entry: {
             contentscript: './source/contentscript/index.ts',
             popup: './source/popup/index.tsx',
+            library: './source/library/index.tsx',
         },
         resolve: {
             extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -47,6 +48,19 @@ module.exports = (_environment, arguments_) => {
             ],
         },
         optimization: {
+            // the popup and the notes library share React and styled-components in
+            // one file; the content script never splits, it must stay a single file
+            splitChunks: {
+                cacheGroups: {
+                    shared: {
+                        test: /[\\/]node_modules[\\/]/,
+                        name: 'shared',
+                        chunks: (chunk) => chunk.name !== 'contentscript',
+                        minChunks: 2,
+                        enforce: true,
+                    },
+                },
+            },
             minimize: production,
             minimizer: [
                 new TerserPlugin({
@@ -84,6 +98,12 @@ module.exports = (_environment, arguments_) => {
                 template: './source/popup/index.html',
                 chunks: ['popup'],
                 filename: 'popup.html',
+                minify: production,
+            }),
+            new HtmlWebpackPlugin({
+                template: './source/library/index.html',
+                chunks: ['library'],
+                filename: 'library.html',
                 minify: production,
             }),
         ],

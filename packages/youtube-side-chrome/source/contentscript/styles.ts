@@ -14,6 +14,10 @@ export const INVERTED_ATTRIBUTE = 'data-youtube-side-inverted';
 export const RELATED_HIDDEN_ATTRIBUTE = 'data-youtube-side-hidden';
 export const SUSPENDED_ATTRIBUTE = 'data-youtube-side-suspended';
 export const VIEW_ATTRIBUTE = 'data-youtube-side-view';
+export const HIDDEN_SECTIONS_ATTRIBUTE = 'data-youtube-side-hide';
+export const LAYOUT_ATTRIBUTE = 'data-youtube-side-layout';
+export const MARKERS_CLASS = 'youtube-side-markers';
+export const TOAST_CLASS = 'youtube-side-toast';
 
 export const WIDTH_PROPERTY = '--youtube-side-width';
 export const HEIGHT_PROPERTY = '--youtube-side-height';
@@ -45,7 +49,12 @@ html:not([dark]) #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"] { --youtube-side-surfa
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${INVERTED_ATTRIBUTE}="true"] > * { filter: invert(1) hue-rotate(180deg); }
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${INVERTED_ATTRIBUTE}="true"] :is(img, video, canvas) { filter: invert(1) hue-rotate(180deg); }
 #${CHAT_ID}[${ACTIVE_ATTRIBUTE}="true"] { box-sizing: border-box !important; position: absolute !important; top: var(${CHAT_TOP_PROPERTY}) !important; width: min(400px, calc(100vw - 48px)) !important; }
-#${RELATED_ID}[${RELATED_HIDDEN_ATTRIBUTE}="true"] { display: none !important; }
+#${RELATED_ID}[${RELATED_HIDDEN_ATTRIBUTE}="true"], #${CHAT_ID}[${RELATED_HIDDEN_ATTRIBUTE}="true"] { display: none !important; }
+#${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${HIDDEN_SECTIONS_ATTRIBUTE}~="description"] ytd-watch-metadata #description { display: none !important; }
+#${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${HIDDEN_SECTIONS_ATTRIBUTE}~="comments"] ytd-comments#comments { display: none !important; }
+.${MARKERS_CLASS} { position: absolute; inset: 0; z-index: 34; pointer-events: none; }
+.${MARKERS_CLASS}-tick { position: absolute; top: -3px; bottom: 0; width: 3px; margin-left: -1px; border-radius: 1px; background: #ffd54f; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.${TOAST_CLASS} { position: absolute; top: 16px; left: 50%; z-index: 80; transform: translateX(-50%); padding: 6px 14px; border-radius: 16px; background: rgba(15, 15, 15, 0.85); color: #fff; font: 500 13px Roboto, Arial, sans-serif; pointer-events: none; }
 #${STUDY_ID} { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; font-family: Roboto, Arial, sans-serif; font-size: 13px; color: var(--youtube-side-text); }
 #${STUDY_ID} [hidden], #${BELOW_ID}:not([${ACTIVE_ATTRIBUTE}="true"]) > #${STUDY_ID} { display: none !important; }
 #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"][${VIEW_ATTRIBUTE}] > #${STUDY_ID} { height: 100%; margin-bottom: 0; }
@@ -78,6 +87,9 @@ html:not([dark]) #${BELOW_ID}[${ACTIVE_ATTRIBUTE}="true"] { --youtube-side-surfa
 .youtube-side-bookmark { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; background: var(--youtube-side-layer); }
 .youtube-side-bookmark-bar { display: flex; align-items: center; justify-content: space-between; }
 .youtube-side-field { padding: 2px 0; border: 0; border-bottom: 1px solid var(--youtube-side-layer); background: transparent; color: inherit; font: inherit; }
+.youtube-side-jumps { display: flex; flex-wrap: wrap; gap: 4px; }
+.youtube-side-jump { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; text-align: start; }
+.youtube-side-jump-text { overflow: hidden; max-width: 220px; white-space: nowrap; text-overflow: ellipsis; }
 .youtube-side-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
 @media (prefers-reduced-motion: reduce) { .youtube-side-tab { transition: none; } }
 `;

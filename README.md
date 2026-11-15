@@ -17,6 +17,7 @@ Press **Alt/Option + S** on a YouTube page to lift the details panel beside the 
 - **Alt/Option + L** moves the panel to the left or right edge.
 - **Alt/Option + R** shows or hides the recommendations column.
 - **Alt/Option + T** cycles the study views (Side, Transcript, Chapters, Notes) while the panel is open; the arrow keys also move between the view tabs.
+- **Alt/Option + M** bookmarks the current moment, with the panel open or closed; a short message over the player confirms it. While you type in a video's note, it inserts the current time instead.
 - The popup's **side position** switch toggles the layout for the current tab, same as Alt/Option + S; the popup talks to the YouTube page over extension messaging, so no extra permission is needed.
 - The popup's **invert text** control inverts the panel's text and background colors while keeping avatars and thumbnails intact - useful when a transparent panel sits over a bright video. In **auto** mode the extension samples the video region behind the panel about once a second and inverts only while that area is bright, with hysteresis so scene cuts do not cause flicker. Frames never leave the page.
 
@@ -24,16 +25,23 @@ Press **Alt/Option + S** on a YouTube page to lift the details panel beside the 
 
 - **Anchor Modes**: Position the panel anchored to the viewport edge or aligned with the video player (`viewport` vs `player`); a player-anchored panel follows the player in theater mode and as the page scrolls.
 - **Player-Mode Awareness**: Suspends the side panel in fullscreen and in the miniplayer, and restores it with the same size and position when you return. Picture-in-picture keeps the panel open.
-- **Contextual Activation Rules**: Automatically activate Side layout depending on video context: `never`, `live` (live streams), `long` (videos of 20 minutes or more, decided once the video's own duration is known, never from a pre-roll ad), or `always`. Closing the panel yourself always wins for the rest of that video.
+- **Contextual Activation Rules**: Automatically activate Side layout depending on video context: `never`, `live` (live streams), `long` (videos of 20 minutes or more, decided once the video's own duration is known, never from a pre-roll ad), or `always`. A panel a rule opened closes again on the next video the rule does not match; a panel you opened stays open. Closing the panel yourself always wins for the rest of that video.
 - **Per-Channel Rules**: Set custom overrides for specific channels to `always` or `never` open in Side layout. Rules are applied only once YouTube shows the new video's channel, so they never act on the previous video's channel.
-- **Viewport Presets**: Overlay `standard`, `live`, or `theater` presets on the base settings. A size you set by dragging or in the popup always wins over the player-derived height.
+- **Viewport Presets**: Overlay `standard`, `live`, or `theater` presets on the base settings. A size you set by dragging or in the popup always wins over the player-derived height, also after a reload; **reset** in the popup makes the panel follow the player again.
+- **Out of YouTube's Way**: When one of YouTube's own side panels is open (its transcript, chapters, or comments panel) where the Side panel sits, the Side panel moves to the other edge until YouTube's panel closes.
+- **Panel Sections**: Show or hide the description, the comments, and the live chat in the panel, each on its own.
+- **YouTube's New Layout**: YouTube is testing a watch page that keeps the description and comments in its own side panel. There the Side view says so and points to the study views, which work as usual.
 
 ### Study Mode
 
 - **Transcript Viewer**: Searchable (case- and accent-insensitive), seekable transcript that can follow playback; scrolling the list yourself pauses following until you resume it. The transcript comes from YouTube: when YouTube's caption files can be read directly they are used, otherwise opening the Transcript view opens YouTube's own transcript panel, reads it, and closes it again. If YouTube cannot load a transcript, the view says so and offers a retry.
 - **Chapter Navigation**: The video's chapters with the current chapter highlighted and seek on click.
-- **Notes & Bookmarks**: Capture the current moment with one click (labelled with the current chapter), edit labels and notes inline, and keep them per video in local extension storage (up to 50 videos, 200 bookmarks each). If storage rejects a save, the panel tells you.
-- **Markdown Export**: Copy or download your bookmarks and notes for a video as Markdown. Exports never include transcript text.
+- **Notes & Bookmarks**: Capture the current moment with one click or Alt/Option + M (labelled with the current chapter), edit labels and notes inline, and keep them per video in local extension storage, for as many videos as you like (up to 1,000 bookmarks per video). Edits save as you type. If storage rejects a save, the panel tells you.
+- **Bookmarks on the Progress Bar**: Each bookmark shows as a small mark on YouTube's progress bar, so you can see and scrub to it; this can be turned off in the popup.
+- **Timestamps in Notes**: **+ Time** or Alt/Option + M inserts the current time, like `[12:34]`, where you are typing. Every timestamp in the note is listed under it as a button that jumps there.
+- **Quote the Transcript**: **Quote** in the Transcript view adds the current line to the video's note with its time (`> [12:34] …`); Shift+click quotes any line. Only the lines you choose are saved.
+- **Markdown Export**: Copy or download your bookmarks and notes for a video as Markdown; timestamps in the note become links. Exports never include transcript text you did not quote.
+- **Notes Library**: **notes library** in the popup opens a page with every video you took notes on, newest first, with its title and channel. Search across all of them, open a video at a bookmark, export everything (or what matches) as one Markdown file, back up to a JSON file and restore it in any browser (restoring merges, never overwrites), and delete a video's notes.
 
 While the panel is open with study mode on, clicking YouTube's own **Show transcript** button also brings the transcript into the Transcript view.
 
@@ -41,9 +49,9 @@ The panel can be resized directly by dragging its bottom corner (always the corn
 
 ## Scope and permissions
 
-The content script runs only on www.youtube.com. The manifest requests only the `storage` permission; it has no background service, remote code, analytics, or network permission. The shortcuts are handled inside each YouTube page, so one tab cannot toggle another, and they are ignored while typing in the search box, comments, or any other text field.
+The content script runs only on www.youtube.com. The manifest requests only the `storage` and `unlimitedStorage` permissions (the latter lifts Chrome's 10 MB cap on extension storage so notes are never limited by count, and shows no warning at install); it has no background service, remote code, analytics, or network permission. The shortcuts are handled inside each YouTube page, so one tab cannot toggle another, and they are ignored while typing in the search box, comments, or any other text field.
 
-The only network activity is in the Transcript view, and only after you open it: the page may request a caption file from YouTube itself (the same request YouTube's player makes), or open YouTube's own transcript panel, which loads the transcript the way YouTube always does. Transcripts are kept in memory for the last three videos and are never stored or exported. Bookmarks and notes stay in local extension storage.
+The only network activity is in the Transcript view, and only after you open it: the page may request a caption file from YouTube itself (the same request YouTube's player makes), or open YouTube's own transcript panel, which loads the transcript the way YouTube always does. Transcripts are kept in memory for the last three videos and are never stored or exported. Bookmarks and notes stay in local extension storage, one entry per video; backups are files you save yourself.
 
 ## Development
 

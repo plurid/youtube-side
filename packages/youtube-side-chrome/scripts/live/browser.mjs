@@ -197,12 +197,12 @@ export const panelState = (page) =>
                 document.querySelector('#below ytd-watch-metadata')?.getBoundingClientRect().height,
             ),
             content: document.getElementById('youtube-side-study-content')?.textContent ?? '',
-            youtubePanel:
-                document
-                    .querySelector(
-                        'ytd-engagement-panel-section-list-renderer[target-id*="transcript"]',
-                    )
-                    ?.getAttribute('visibility') ?? null,
+            // any of YouTube's side panels: some transcript panels carry no target-id
+            youtubePanel: document.querySelector(
+                'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]:not([target-id="engagement-panel-ads"])',
+            )
+                ? 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED'
+                : 'ENGAGEMENT_PANEL_VISIBILITY_HIDDEN',
             time: video?.currentTime ?? null,
             paused: video?.paused ?? null,
         };

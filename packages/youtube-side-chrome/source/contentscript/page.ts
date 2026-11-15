@@ -1,4 +1,4 @@
-import type { Rect } from '~data/context';
+import type { Rect, WatchLayout } from '~data/context';
 
 // YouTube watch-page markup, verified against live pages; every other module
 // reads the page through these adapters so selector drift stays in one place
@@ -97,6 +97,15 @@ export const readChannelKey = (root: Document = document): string | null => {
     }
 };
 
+export const readChannelName = (root: Document = document): string =>
+    root
+        .querySelector('ytd-watch-metadata #channel-name a, ytd-watch-metadata ytd-channel-name a')
+        ?.textContent?.trim() ?? '';
+
+/** The scrubbing track of YouTube's progress bar; chapter gaps sit inside it. */
+export const getProgressBar = (root: Document = document): HTMLElement | null =>
+    root.querySelector<HTMLElement>(`#${MOVIE_PLAYER_ID} .ytp-progress-bar`);
+
 export const readVideoTitle = (root: Document = document): string => {
     const heading = root.querySelector('ytd-watch-metadata h1')?.textContent?.trim();
     if (heading) {
@@ -108,6 +117,49 @@ export const readVideoTitle = (root: Document = document): string => {
 
 export const canonicalVideoUrl = (videoId: string): string =>
     `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+
+export type { WatchLayout };
+
+/**
+ * The classic watch page renders the description and comments inside
+ * `#below`, under the video. YouTube's experimental layout (seen in some
+ * fresh sessions in November 2026; its markup has not been recorded yet)
+ * moves them into a side panel of its own and leaves only the title block.
+ * Presence, not size, is read here, because the extension itself hides
+ * `#below`'s content in the study views. A layout that only hides the
+ * description stays `classic`, which is today's behavior.
+ */
+export const detectWatchLayout = (root: Document = document): WatchLayout => {
+    const below = root.getElementById('below');
+    const title = below?.querySelector('ytd-watch-metadata h1')?.textContent?.trim();
+    if (!below || !title) {
+        return 'unknown';
+    }
+
+    const hasDescription = below.querySelector('ytd-watch-metadata #description') !== null;
+    const hasComments = below.querySelector('ytd-comments#comments') !== null;
+    return hasDescription || hasComments ? 'classic' : 'panels';
+};
+
+// YouTube also opens a panel of its own for an ad's companion while an ad plays; that one
+// is not a panel the reader opened, so the Side panel does not move for it
+const EXPANDED_ENGAGEMENT_PANEL =
+    'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]:not([target-id="engagement-panel-ads"])';
+
+/** Holds YouTube's engagement panels; their `visibility` attribute opens and closes them. */
+export const getEngagementPanels = (root: Document = document): HTMLElement | null =>
+    root.querySelector<HTMLElement>('ytd-watch-flexy #panels');
+
+/** The first of YouTube's own side panels (transcript, chapters, comments, description) that is open. */
+export const measureYouTubePanel = (root: Document = document): Rect | null => {
+    for (const panel of root.querySelectorAll(EXPANDED_ENGAGEMENT_PANEL)) {
+        const rect = toRect(panel);
+        if (rect) {
+            return rect;
+        }
+    }
+    return null;
+};
 
 const toRect = (element: Element): Rect | null => {
     const rect = element.getBoundingClientRect();

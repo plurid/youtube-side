@@ -22,9 +22,12 @@ const expectedFiles = new Set([
     'assets/icons/icon48.png',
     'assets/icons/icon128.png',
     'contentscript.js',
+    'library.html',
+    'library.js',
     'manifest.json',
     'popup.html',
     'popup.js',
+    'shared.js',
 ]);
 
 const listFiles = async (directory, prefix = '') => {
@@ -74,7 +77,10 @@ const assertBundleSize = async (filename, rawLimit, gzipLimit) => {
 // and player-adaptive geometry engines while remaining dependency-free; the
 // limits were raised in 1.1.0 to leave hotfix room above the trimmed build
 await assertBundleSize('contentscript.js', 70_000, 24_000);
-await assertBundleSize('popup.js', 450_000, 140_000);
+// React and styled-components, shared by the popup and the notes library
+await assertBundleSize('shared.js', 260_000, 85_000);
+await assertBundleSize('popup.js', 300_000, 90_000);
+await assertBundleSize('library.js', 60_000, 20_000);
 
 const archivePath = path.join(
     packageRoot,

@@ -11,14 +11,18 @@ import {
 } from '~data/options';
 import {
     APP_MODE_ATTRIBUTES,
+    detectWatchLayout,
     getApp,
+    getEngagementPanels,
     getMainVideo,
     getMoviePlayer,
     getWatchFlexy,
     getWatchVideoId,
     isAdShowing,
     isPageDataCurrent,
+    measureYouTubePanel,
     PAGE_MODE_ATTRIBUTES,
+    type WatchLayout,
 } from './page';
 import {
     derivePlayerContext,
@@ -26,9 +30,11 @@ import {
     resolveActivation,
     resolveLayout,
     resolveOptions,
+    resolveSide,
 } from './player';
-import { StudyPanel } from './study/studyPanel';
-import { isTranscriptButton } from './study/transcript';
+import { BookmarkMarkers } from './study/markers';
+import { isMarkShortcut, StudyPanel } from './study/studyPanel';
+import { isReadingYouTubePanel, isTranscriptButton } from './study/transcript';
 import {
     ACTIVE_ATTRIBUTE,
     BACKGROUND_ATTRIBUTE,
@@ -37,7 +43,9 @@ import {
     CHAT_ID,
     CHAT_TOP_PROPERTY,
     HEIGHT_PROPERTY,
+    HIDDEN_SECTIONS_ATTRIBUTE,
     INVERTED_ATTRIBUTE,
+    LAYOUT_ATTRIBUTE,
     MASTHEAD_HEIGHT,
     OFFSET_X_PROPERTY,
     OFFSET_Y_PROPERTY,
@@ -50,6 +58,7 @@ import {
     SUSPENDED_ATTRIBUTE,
     WIDTH_PROPERTY,
 } from './styles';
+import { showToast } from './toast';
 
 const OBSERVER_LIFETIME = 10_000;
 const RESIZE_COMMIT_DELAY = 200;
@@ -86,6 +95,10 @@ export class YouTubeSideController {
     private appObserver: MutationObserver | undefined;
     private player: HTMLElement | null = null;
     private playerResizeObserver: ResizeObserver | undefined;
+    private panels: HTMLElement | null = null;
+    private panelsObserver: MutationObserver | undefined;
+    private layout: WatchLayout = 'unknown';
+    private dodged = false;
     private video: HTMLVideoElement | null = null;
 
     private resizeObserver: ResizeObserver | undefined;
@@ -100,9 +113,11 @@ export class YouTubeSideController {
 
     private unsubscribeOptions: (() => void) | undefined;
     private studyPanel: StudyPanel | null = null;
+    private markers: BookmarkMarkers | null = null;
     private videoId: string | null = null;
     private readonly manualOverrides = new Map<string, boolean>();
-    private explicitSize = false;
+    /** the panel was opened by an activation rule, not by the user */
+    private autoOpened = false;
     private effectiveVisible = false;
     private suspendReason: SuspendReason | null = null;
     private anchor: LayoutAnchor = 'viewport';
@@ -137,6 +152,7 @@ export class YouTubeSideController {
         }
 
         this.studyPanel = new StudyPanel({ follow: this.options.studyFollow });
+        this.markers = new BookmarkMarkers();
         this.watchPage();
         this.syncVideo();
         this.evaluateAutoActivation();
@@ -172,6 +188,8 @@ export class YouTubeSideController {
 
         this.studyPanel?.destroy();
         this.studyPanel = null;
+        this.markers?.destroy();
+        this.markers = null;
 
         this.active = false;
         this.applyLayout();
@@ -184,12 +202,15 @@ export class YouTubeSideController {
             effectiveVisible: this.active && this.effectiveVisible,
             suspendReason: this.active ? this.suspendReason : null,
             context: derivePlayerContext(),
+            layout: this.layout,
+            dodged: this.active && this.dodged,
         };
     }
 
     public setActive(active: boolean, isManual = false): SideStatus {
         this.active = active;
         if (isManual) {
+            this.autoOpened = false;
             this.rememberManualOverride(active);
         }
 
@@ -252,13 +273,23 @@ export class YouTubeSideController {
         const context = derivePlayerContext();
         const effectiveOptions = resolveOptions(this.options, context);
         this.anchor = effectiveOptions.layoutAnchor;
+        this.layout = detectWatchLayout();
+
+        // while this extension reads YouTube's transcript panel it is open only briefly
+        const side = resolveSide({
+            left: effectiveOptions.left,
+            width: Math.min(effectiveOptions.width, window.innerWidth),
+            viewportWidth: window.innerWidth,
+            youtubePanel: this.active && !isReadingYouTubePanel() ? measureYouTubePanel() : null,
+        });
+        this.dodged = side.dodged;
 
         const decision: LayoutDecision = resolveLayout({
             anchor: effectiveOptions.layoutAnchor,
-            side: effectiveOptions.left ? 'left' : 'right',
+            side: side.left ? 'left' : 'right',
             width: effectiveOptions.width,
             height: effectiveOptions.height,
-            explicitSize: this.explicitSize,
+            explicitSize: effectiveOptions.customSize,
             mode: context.mode,
             playerRect: context.playerRect,
             viewport: {
@@ -279,7 +310,8 @@ export class YouTubeSideController {
         if (below) {
             if (this.active) {
                 below.setAttribute(ACTIVE_ATTRIBUTE, 'true');
-                below.setAttribute(POSITION_ATTRIBUTE, effectiveOptions.left ? 'left' : 'right');
+                below.setAttribute(POSITION_ATTRIBUTE, side.left ? 'left' : 'right');
+                below.setAttribute(LAYOUT_ATTRIBUTE, this.layout);
                 below.setAttribute(BACKGROUND_ATTRIBUTE, effectiveOptions.background);
                 below.setAttribute(INVERTED_ATTRIBUTE, String(this.inverted(effectiveOptions)));
 
@@ -294,10 +326,21 @@ export class YouTubeSideController {
                 below.style.setProperty(BLUR_PROPERTY, `${effectiveOptions.blur}px`);
                 below.style.setProperty(OPACITY_PROPERTY, `${effectiveOptions.opacity}%`);
 
-                this.correctPanelOffset(below, decision, effectiveOptions);
+                const hiddenSections = [
+                    effectiveOptions.showDescription ? '' : 'description',
+                    effectiveOptions.showComments ? '' : 'comments',
+                ].filter(Boolean);
+                if (hiddenSections.length > 0) {
+                    below.setAttribute(HIDDEN_SECTIONS_ATTRIBUTE, hiddenSections.join(' '));
+                } else {
+                    below.removeAttribute(HIDDEN_SECTIONS_ATTRIBUTE);
+                }
+
+                this.correctPanelOffset(below, decision, side.left);
 
                 // mounting is idempotent; it only builds the study UI when it is missing
                 if (effectiveOptions.studyEnabled) {
+                    this.studyPanel?.setLayout(this.layout);
                     this.studyPanel?.mount(below, context.videoId);
                 } else {
                     this.studyPanel?.unmount();
@@ -305,9 +348,11 @@ export class YouTubeSideController {
             } else {
                 below.removeAttribute(ACTIVE_ATTRIBUTE);
                 below.removeAttribute(POSITION_ATTRIBUTE);
+                below.removeAttribute(LAYOUT_ATTRIBUTE);
                 below.removeAttribute(BACKGROUND_ATTRIBUTE);
                 below.removeAttribute(INVERTED_ATTRIBUTE);
                 below.removeAttribute(SUSPENDED_ATTRIBUTE);
+                below.removeAttribute(HIDDEN_SECTIONS_ATTRIBUTE);
                 below.style.removeProperty(WIDTH_PROPERTY);
                 below.style.removeProperty(HEIGHT_PROPERTY);
                 below.style.removeProperty(BLUR_PROPERTY);
@@ -326,6 +371,9 @@ export class YouTubeSideController {
         this.watchResize(shown ? below : null);
         this.updateSampler(effectiveOptions);
 
+        this.markers?.setEnabled(effectiveOptions.studyEnabled && effectiveOptions.bookmarkMarkers);
+        this.markers?.render();
+
         if (chat) {
             if (shown) {
                 chat.setAttribute(ACTIVE_ATTRIBUTE, 'true');
@@ -333,6 +381,12 @@ export class YouTubeSideController {
             } else {
                 chat.removeAttribute(ACTIVE_ATTRIBUTE);
                 chat.style.removeProperty(CHAT_TOP_PROPERTY);
+            }
+
+            if (shown && !effectiveOptions.showChat) {
+                chat.setAttribute(RELATED_HIDDEN_ATTRIBUTE, 'true');
+            } else {
+                chat.removeAttribute(RELATED_HIDDEN_ATTRIBUTE);
             }
         }
 
@@ -349,11 +403,7 @@ export class YouTubeSideController {
         }
     }
 
-    private correctPanelOffset(
-        below: HTMLElement,
-        decision: LayoutDecision,
-        options: Options,
-    ): void {
+    private correctPanelOffset(below: HTMLElement, decision: LayoutDecision, left: boolean): void {
         below.style.setProperty(OFFSET_X_PROPERTY, '0px');
         below.style.setProperty(OFFSET_Y_PROPERTY, '0px');
 
@@ -362,7 +412,7 @@ export class YouTubeSideController {
             return;
         }
 
-        const offsetX = options.left
+        const offsetX = left
             ? decision.sideOffset - rect.left
             : rect.right - (window.innerWidth - decision.sideOffset);
         const offsetY = decision.top - rect.top;
@@ -452,6 +502,22 @@ export class YouTubeSideController {
             }
         }
 
+        const panels = getEngagementPanels();
+        if (panels !== this.panels) {
+            this.panelsObserver?.disconnect();
+            this.panelsObserver = undefined;
+            this.panels = panels;
+            if (panels) {
+                // opening or closing one of YouTube's side panels may move this panel aside
+                this.panelsObserver = new MutationObserver(this.scheduleApply);
+                this.panelsObserver.observe(panels, {
+                    attributes: true,
+                    attributeFilter: ['visibility'],
+                    subtree: true,
+                });
+            }
+        }
+
         this.attachVideo(getMainVideo());
     }
 
@@ -467,6 +533,10 @@ export class YouTubeSideController {
         this.playerResizeObserver?.disconnect();
         this.playerResizeObserver = undefined;
         this.player = null;
+
+        this.panelsObserver?.disconnect();
+        this.panelsObserver = undefined;
+        this.panels = null;
 
         this.attachVideo(null);
     }
@@ -518,6 +588,7 @@ export class YouTubeSideController {
         if (videoId !== this.videoId) {
             this.videoId = videoId;
             void this.studyPanel?.handleVideoChange(videoId);
+            this.markers?.setVideo(videoId);
         }
     }
 
@@ -545,11 +616,6 @@ export class YouTubeSideController {
     };
 
     private handleOptionsChange = (options: Options): void => {
-        // a size change that did not come from this tab is an explicit user choice
-        if (options.width !== this.options.width || options.height !== this.options.height) {
-            this.explicitSize = true;
-        }
-
         this.options = options;
         this.studyPanel?.setFollowDefault(options.studyFollow);
         this.evaluateAutoActivation();
@@ -759,10 +825,12 @@ export class YouTubeSideController {
         below.style.removeProperty('width');
         below.style.removeProperty('height');
 
-        this.explicitSize = true;
-
-        if (width !== this.options.width || height !== this.options.height) {
-            this.patchOptions({ width, height });
+        if (
+            width !== this.options.width ||
+            height !== this.options.height ||
+            !this.options.customSize
+        ) {
+            this.patchOptions({ width, height, customSize: true });
         }
     }
 
@@ -805,13 +873,21 @@ export class YouTubeSideController {
 
         if (decision === 'activate' && !this.active) {
             this.active = true;
+            this.autoOpened = true;
             if (this.options.studyEnabled && this.options.studyAutoOpen !== 'off') {
                 this.studyPanel?.setView(this.options.studyAutoOpen);
             }
             this.scheduleApply();
             this.watchForTargets();
-        } else if (decision === 'deactivate' && this.active) {
+        } else if (
+            this.active &&
+            (decision === 'deactivate' ||
+                // a panel a rule opened closes on a video the rule does not match, once the
+                // video's kind is known (never during an ad or before its duration loads)
+                (decision === 'stay' && this.autoOpened && context.kind !== 'unknown'))
+        ) {
             this.active = false;
+            this.autoOpened = false;
             this.scheduleApply();
         }
     }
@@ -902,6 +978,14 @@ export class YouTubeSideController {
                 }
                 event.preventDefault();
                 this.studyPanel?.cycleView();
+                break;
+            case 'KeyM':
+                // bookmarks the moment whether or not the panel is open
+                if (!isMarkShortcut(event) || !this.options.studyEnabled || !getWatchVideoId()) {
+                    return;
+                }
+                event.preventDefault();
+                void this.studyPanel?.captureBookmark().then(showToast);
                 break;
             default:
                 break;

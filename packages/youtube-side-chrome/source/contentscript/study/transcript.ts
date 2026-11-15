@@ -39,9 +39,8 @@ const TRANSCRIPT_BUTTON_SELECTOR = 'ytd-video-description-transcript-section-ren
 const PANEL_SEGMENT_SELECTOR = 'transcript-segment-view-model, ytd-transcript-segment-renderer';
 const SEGMENT_TIME_SELECTOR = '.ytwTranscriptSegmentViewModelTimestamp, .segment-timestamp';
 const SEGMENT_TEXT_SELECTOR = '.ytAttributedStringHost, [role="text"], .segment-text';
-const TRANSCRIPT_PANEL_SELECTOR =
-    'ytd-engagement-panel-section-list-renderer[target-id*="transcript"]';
-const EXPANDED_PANEL_SELECTOR = `${TRANSCRIPT_PANEL_SELECTOR}[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]`;
+const EXPANDED_PANEL_SELECTOR =
+    'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]';
 const PANEL_CLOSE_SELECTOR = '#visibility-button button';
 
 const CLOCK_PATTERN = /^(?:(\d+):)?(\d{1,2}):(\d{2})$/;
@@ -516,6 +515,11 @@ export const findTranscriptButton = (root: Document = document): HTMLElement | n
 // set while this module clicks YouTube's button itself, so that click is not
 // mistaken for the user opening the transcript
 let openingPanel = false;
+// panels this module opened to read and will close again
+let readingPanels = 0;
+
+/** True while YouTube's transcript panel is open only so this module can read it. */
+export const isReadingYouTubePanel = (): boolean => readingPanels > 0;
 
 /** A click on YouTube's own "Show transcript" button that this module did not make. */
 export const isTranscriptButton = (target: EventTarget | null): boolean =>
@@ -523,11 +527,27 @@ export const isTranscriptButton = (target: EventTarget | null): boolean =>
     target instanceof Element &&
     target.closest(TRANSCRIPT_BUTTON_SELECTOR) !== null;
 
-const isPanelExpanded = (root: Document): boolean =>
-    root.querySelector(EXPANDED_PANEL_SELECTOR) !== null;
+const expandedPanels = (root: Document): Element[] => [
+    ...root.querySelectorAll(EXPANDED_PANEL_SELECTOR),
+];
 
-const closePanel = (root: Document): void => {
-    root.querySelector<HTMLElement>(`${EXPANDED_PANEL_SELECTOR} ${PANEL_CLOSE_SELECTOR}`)?.click();
+/**
+ * YouTube names most transcript panels in their `target-id`; the panel some
+ * videos open has none (seen 2026-11-15), but it holds the transcript rows.
+ */
+const isTranscriptPanel = (panel: Element): boolean =>
+    (panel.getAttribute('target-id') ?? '').includes('transcript') ||
+    panel.querySelector(PANEL_SEGMENT_SELECTOR) !== null;
+
+const isPanelExpanded = (root: Document): boolean => expandedPanels(root).some(isTranscriptPanel);
+
+/** Closes the panels that opened since `before` was taken: the ones this module's click opened. */
+const closePanelsOpenedSince = (root: Document, before: ReadonlySet<Element>): void => {
+    for (const panel of expandedPanels(root)) {
+        if (!before.has(panel)) {
+            panel.querySelector<HTMLElement>(PANEL_CLOSE_SELECTOR)?.click();
+        }
+    }
 };
 
 /**
@@ -582,6 +602,7 @@ export const loadTranscriptFromPanel = ({
         let done = false;
         let clicked = false;
         let openedByUs = false;
+        let expandedBefore: ReadonlySet<Element> = new Set();
         let lastCount = -1;
         let timer: number | undefined;
 
@@ -593,7 +614,8 @@ export const loadTranscriptFromPanel = ({
             window.clearInterval(timer);
             signal?.removeEventListener('abort', handleAbort);
             if (openedByUs) {
-                closePanel(root);
+                closePanelsOpenedSince(root, expandedBefore);
+                readingPanels -= 1;
             }
             if (transcript && !signal?.aborted) {
                 cacheTranscript(videoId, transcript);
@@ -624,6 +646,10 @@ export const loadTranscriptFromPanel = ({
                 }
                 clicked = true;
                 openedByUs = !isPanelExpanded(root);
+                expandedBefore = new Set(expandedPanels(root));
+                if (openedByUs) {
+                    readingPanels += 1;
+                }
                 openingPanel = true;
                 try {
                     button.click();

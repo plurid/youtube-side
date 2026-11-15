@@ -31,6 +31,11 @@ export const StyledNotice = styled.div`
     text-align: center;
 `;
 
+export const StyledHint = styled.div`
+    font-size: 0.8rem;
+    opacity: 0.8;
+`;
+
 export const StyledSection = styled.div`
     width: 250px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);

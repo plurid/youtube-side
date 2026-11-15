@@ -31,6 +31,17 @@ export interface Options {
     height: number;
     left: boolean;
     recommendations: boolean;
+    /**
+     * Set once the user sizes the panel (dragging it or in the popup); a
+     * player-anchored panel then keeps that height instead of the player's.
+     * Reset clears it.
+     */
+    customSize: boolean;
+
+    // panel sections, applied while the Side panel is shown
+    showDescription: boolean;
+    showComments: boolean;
+    showChat: boolean;
 
     // Direction C (Adaptive Layout)
     layoutAnchor: LayoutAnchor;
@@ -42,6 +53,8 @@ export interface Options {
     studyEnabled: boolean;
     studyFollow: boolean;
     studyAutoOpen: StudyAutoOpen;
+    /** bookmark ticks on YouTube's progress bar */
+    bookmarkMarkers: boolean;
 }
 
 interface StoredOptions {
@@ -78,6 +91,11 @@ export const DEFAULT_OPTIONS: Readonly<Options> = Object.freeze({
     height: 550,
     left: true,
     recommendations: true,
+    customSize: false,
+
+    showDescription: true,
+    showComments: true,
+    showChat: true,
 
     layoutAnchor: 'viewport',
     autoActivate: 'never',
@@ -87,6 +105,7 @@ export const DEFAULT_OPTIONS: Readonly<Options> = Object.freeze({
     studyEnabled: true,
     studyFollow: true,
     studyAutoOpen: 'off',
+    bookmarkMarkers: true,
 });
 
 const defaults = (): Options => ({
@@ -100,6 +119,9 @@ const isInvertTextMode = (value: unknown): value is InvertTextMode =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const booleanOr = (value: unknown, fallback: boolean): boolean =>
+    typeof value === 'boolean' ? value : fallback;
 
 const boundedInteger = (value: unknown, fallback: number, minimum: number, maximum: number) => {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -266,26 +288,23 @@ export const normalizeOptions = (value: unknown): Options => {
               : DEFAULT_OPTIONS.invertText,
         width: boundedInteger(candidate.width, DEFAULT_OPTIONS.width, WIDTH_MIN, WIDTH_MAX),
         height: boundedInteger(candidate.height, DEFAULT_OPTIONS.height, HEIGHT_MIN, HEIGHT_MAX),
-        left: typeof candidate.left === 'boolean' ? candidate.left : DEFAULT_OPTIONS.left,
-        recommendations:
-            typeof candidate.recommendations === 'boolean'
-                ? candidate.recommendations
-                : DEFAULT_OPTIONS.recommendations,
+        left: booleanOr(candidate.left, DEFAULT_OPTIONS.left),
+        recommendations: booleanOr(candidate.recommendations, DEFAULT_OPTIONS.recommendations),
+        customSize: booleanOr(candidate.customSize, DEFAULT_OPTIONS.customSize),
+
+        showDescription: booleanOr(candidate.showDescription, DEFAULT_OPTIONS.showDescription),
+        showComments: booleanOr(candidate.showComments, DEFAULT_OPTIONS.showComments),
+        showChat: booleanOr(candidate.showChat, DEFAULT_OPTIONS.showChat),
 
         layoutAnchor,
         autoActivate,
         presets: normalizePresets(candidate.presets),
         channelRules: normalizeChannelRules(candidate.channelRules),
 
-        studyEnabled:
-            typeof candidate.studyEnabled === 'boolean'
-                ? candidate.studyEnabled
-                : DEFAULT_OPTIONS.studyEnabled,
-        studyFollow:
-            typeof candidate.studyFollow === 'boolean'
-                ? candidate.studyFollow
-                : DEFAULT_OPTIONS.studyFollow,
+        studyEnabled: booleanOr(candidate.studyEnabled, DEFAULT_OPTIONS.studyEnabled),
+        studyFollow: booleanOr(candidate.studyFollow, DEFAULT_OPTIONS.studyFollow),
         studyAutoOpen,
+        bookmarkMarkers: booleanOr(candidate.bookmarkMarkers, DEFAULT_OPTIONS.bookmarkMarkers),
     };
 };
 

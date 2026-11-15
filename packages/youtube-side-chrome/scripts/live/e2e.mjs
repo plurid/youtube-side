@@ -10,6 +10,7 @@ import {
     panelState,
     pressShortcut,
     setOptions,
+    skipAds,
     sleep,
     waitFor,
 } from './browser.mjs';
@@ -265,6 +266,164 @@ try {
         state.youtubePanel !== 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED',
         state.youtubePanel,
     );
+
+    // the watch layout YouTube served this session
+    const layout = await page.evaluate(() =>
+        document.querySelector('#below')?.getAttribute('data-youtube-side-layout'),
+    );
+    check('the watch layout is detected', layout === 'classic' || layout === 'panels', layout);
+
+    // quoting a transcript line into the note
+    if (typeof outcome === 'number') {
+        // Shift+click quotes a line instead of seeking
+        const row = await page.$('.youtube-side-transcript-row:nth-child(4)');
+        await page.keyboard.down('Shift');
+        await row?.click();
+        await page.keyboard.up('Shift');
+        await sleep(600);
+        await clickStudy(page, '#youtube-side-tab-notes');
+        await sleep(600);
+        const quoted = await page.evaluate(
+            () => document.querySelector('#youtube-side-study textarea')?.value ?? '',
+        );
+        check(
+            'Quote puts the current line into the note',
+            /^> \[\d+:\d\d\] \S/m.test(quoted),
+            quoted.slice(0, 80),
+        );
+    } else {
+        console.log(
+            'SKIP  Quote puts the current line into the note  (no transcript this session)',
+        );
+        await clickStudy(page, '#youtube-side-tab-notes');
+        await sleep(600);
+    }
+
+    // the current time in the note, and its jump list
+    // End moves to the end of a wrapped line, not of the note, so place the caret directly
+    await page.evaluate(() => {
+        const textarea = document.querySelector('#youtube-side-study textarea');
+        textarea?.focus();
+        textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+    });
+    await pressShortcut(page, 'KeyM');
+    await sleep(700);
+    const timed = await page.evaluate(() => ({
+        value: document.querySelector('#youtube-side-study textarea')?.value ?? '',
+        jumps: document.querySelectorAll('.youtube-side-jump').length,
+        bookmarks: /Bookmarks \(0\)/.test(
+            document.getElementById('youtube-side-study-content')?.textContent ?? '',
+        ),
+    }));
+    check(
+        'Alt+M in the note inserts the time, without a bookmark, and lists it as a jump',
+        /\[\d+:\d\d\] $/.test(timed.value) && timed.jumps >= 1 && timed.bookmarks,
+        JSON.stringify(timed).slice(0, 160),
+    );
+
+    // hiding a section of the panel
+    await clickStudy(page, '#youtube-side-tab-side');
+    await setOptions(session, { showComments: false });
+    await sleep(800);
+    const commentsHeight = () =>
+        page.evaluate(
+            () =>
+                document.querySelector('#below ytd-comments#comments')?.getBoundingClientRect()
+                    .height ?? -1,
+        );
+    check('comments can be hidden in the panel', (await commentsHeight()) === 0);
+    await setOptions(session, { showComments: true });
+    await sleep(800);
+
+    // Alt+M with the panel closed: a bookmark, a toast, and a tick on the progress bar
+    await page.click('body').catch(() => undefined);
+    await pressShortcut(page, 'KeyS');
+    await sleep(600);
+    // a mid-roll ad refuses bookmarks on purpose; wait it out
+    await skipAds(page);
+    const mutedBefore = await page.evaluate(
+        () => document.querySelector('#movie_player video')?.muted,
+    );
+    await pressShortcut(page, 'KeyM');
+    await sleep(900);
+    const marked = await page.evaluate(() => ({
+        toast: document.querySelector('#movie_player .youtube-side-toast')?.textContent ?? '',
+        ticks: document.querySelectorAll(
+            '#movie_player .ytp-progress-bar .youtube-side-markers-tick',
+        ).length,
+        muted: document.querySelector('#movie_player video')?.muted,
+        active: document.querySelector('#below')?.getAttribute('data-youtube-side-active'),
+    }));
+    check(
+        'Alt+M with the panel closed bookmarks the moment and marks the progress bar',
+        /^Bookmarked \d+:\d\d$/.test(marked.toast) && marked.ticks === 1 && !marked.active,
+        JSON.stringify(marked),
+    );
+    check("Alt+M leaves YouTube's mute alone", marked.muted === mutedBefore);
+
+    // keeping off YouTube's own side panel
+    await setOptions(session, { left: false });
+    await pressShortcut(page, 'KeyS');
+    await sleep(600);
+    await page.evaluate(() =>
+        document.querySelector('ytd-video-description-transcript-section-renderer button')?.click(),
+    );
+    const dodged = await waitFor(
+        page,
+        () =>
+            document.querySelector(
+                'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]',
+            ) &&
+            document.querySelector('#below')?.getAttribute('data-youtube-side-position') === 'left',
+        8_000,
+    );
+    check("a right-side panel steps aside while YouTube's own panel is open", Boolean(dodged));
+    // close every open YouTube panel, the way its close buttons do
+    await page.evaluate(() => {
+        for (const button of document.querySelectorAll(
+            'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"] #visibility-button button',
+        )) {
+            button.click();
+        }
+    });
+    const returned = await waitFor(
+        page,
+        () =>
+            document.querySelector('#below')?.getAttribute('data-youtube-side-position') ===
+            'right',
+        8_000,
+    );
+    const afterClose = await page.evaluate(() => ({
+        position: document.querySelector('#below')?.getAttribute('data-youtube-side-position'),
+        open: [
+            ...document.querySelectorAll(
+                'ytd-engagement-panel-section-list-renderer[visibility="ENGAGEMENT_PANEL_VISIBILITY_EXPANDED"]',
+            ),
+        ].map((panel) => panel.getAttribute('target-id')),
+        ad: document.querySelector('#movie_player')?.classList.contains('ad-showing'),
+    }));
+    check("it returns once YouTube's panel closes", Boolean(returned), JSON.stringify(afterClose));
+    await setOptions(session, { left: true });
+    await clickStudy(page, '#youtube-side-tab-side');
+    await sleep(600);
+
+    // the notes library
+    const library = await session.browser.newPage();
+    await library.goto(`chrome-extension://${session.extensionId}/library.html`);
+    const listed = await waitFor(
+        library,
+        () => {
+            const titles = [...document.querySelectorAll('li h2')].map((node) => node.textContent);
+            return titles.length >= 2 ? titles : null;
+        },
+        8_000,
+    );
+    check(
+        'the notes library lists both videos by title',
+        listed?.length === 2 && listed.every((title) => title && title.length > 11),
+        (listed ?? []).join(' | '),
+    );
+    await library.close();
 
     // miniplayer suspension
     await page.click('#movie_player').catch(() => undefined);

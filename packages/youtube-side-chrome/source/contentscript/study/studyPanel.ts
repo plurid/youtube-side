@@ -1,28 +1,37 @@
+import type { WatchLayout } from '~data/context';
 import {
     exportStudyMarkdown,
+    findNoteTimestamps,
     formatTimestamp,
     MAX_BOOKMARK_NOTE_LENGTH,
     MAX_LABEL_LENGTH,
     MAX_VIDEO_NOTE_LENGTH,
+    noteTimestamp,
+    type VideoMeta,
 } from '~data/study';
+import {
+    addBookmark,
+    appendToNote,
+    BookmarkLimitError,
+    type BookmarkUpdate,
+    loadVideoStudy,
+    NoteLimitError,
+    removeBookmark,
+    setVideoNote,
+    subscribeVideoStudy,
+    updateBookmark,
+    whenStudyWritesSettled,
+} from '~data/studyStore';
 import {
     canonicalVideoUrl,
     getMainVideo,
     isAdShowing,
     isPageDataCurrent,
+    readChannelName,
     readVideoTitle,
 } from '../page';
 import { STUDY_CONTENT_ID, STUDY_ID, VIEW_ATTRIBUTE } from '../styles';
 import { type Chapter, extractChaptersFromDOM } from './chapters';
-import {
-    addBookmark,
-    type BookmarkUpdate,
-    loadVideoStudy,
-    removeBookmark,
-    setVideoNote,
-    updateBookmark,
-    whenStudyWritesSettled,
-} from './studyStore';
 import {
     fetchTranscript,
     filterTranscriptSegments,
@@ -59,6 +68,16 @@ const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home
 const BUTTON_KEYS = new Set([' ', 'Enter', ...SCROLL_KEYS]);
 const SAVE_FAILED_MESSAGE =
     "Couldn't save your study notes. Browser storage may be full or unavailable.";
+const MAX_JUMPS = 50;
+
+/** Alt/Option + M: a bookmark anywhere on the page, the current time inside the note. */
+export const isMarkShortcut = (event: KeyboardEvent): boolean =>
+    event.code === 'KeyM' &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.repeat &&
+    !event.isComposing;
 
 const isStudyView = (value: unknown): value is StudyView => VIEW_ORDER.includes(value as StudyView);
 
@@ -157,6 +176,7 @@ export class StudyPanel {
     private currentRow: HTMLElement | null = null;
 
     private view: StudyView = 'side';
+    private layout: WatchLayout = 'unknown';
     private videoId: string | null = null;
     private currentTimeMs = 0;
 
@@ -177,6 +197,8 @@ export class StudyPanel {
     private notesRender = 0;
     private pendingNote: { videoId: string; note: string } | null = null;
     private noteTimer: number | undefined;
+    private jumpList: HTMLElement | null = null;
+    private unsubscribeStudy: (() => void) | undefined;
 
     public constructor(options: StudyPanelOptions = {}) {
         this.followDefault = options.follow ?? true;
@@ -219,6 +241,8 @@ export class StudyPanel {
         this.unmount();
         window.clearTimeout(this.searchTimer);
         this.searchTimer = undefined;
+        this.unsubscribeStudy?.();
+        this.unsubscribeStudy = undefined;
     }
 
     public getView(): StudyView {
@@ -236,6 +260,14 @@ export class StudyPanel {
         this.announce(`${VIEW_LABELS[view]} view`);
         this.renderContent();
         void this.loadViewData();
+    }
+
+    /** YouTube's experimental layout leaves the Side view with only the title, so it says why. */
+    public setLayout(layout: WatchLayout): void {
+        if (layout !== this.layout) {
+            this.layout = layout;
+            this.renderIfVisible('side');
+        }
     }
 
     public cycleView(): void {
@@ -330,6 +362,7 @@ export class StudyPanel {
     private resetVideo(videoId: string | null): void {
         this.cancelTranscriptLoad();
         this.videoId = videoId;
+        this.watchStudy(videoId);
         this.currentTimeMs = 0;
         this.transcript = null;
         this.transcriptStatus = 'idle';
@@ -345,7 +378,36 @@ export class StudyPanel {
         this.notesRender += 1;
     }
 
+    /**
+     * Another tab or the notes library changed this video's notes. The open
+     * Notes view shows the change, unless the user is typing in it.
+     */
+    private watchStudy(videoId: string | null): void {
+        this.unsubscribeStudy?.();
+        this.unsubscribeStudy = videoId
+            ? subscribeVideoStudy(videoId, (_study, { ownWrite }) => {
+                  if (
+                      !ownWrite &&
+                      this.view === 'notes' &&
+                      videoId === this.videoId &&
+                      this.content &&
+                      !this.content.contains(document.activeElement)
+                  ) {
+                      this.renderContent();
+                  }
+              })
+            : undefined;
+    }
+
+    /** The title and channel saved with the video's notes, once the page shows this video. */
+    private meta(videoId: string): VideoMeta {
+        return videoId === this.videoId && isPageDataCurrent(videoId)
+            ? { title: readVideoTitle(), channel: readChannelName() }
+            : {};
+    }
+
     private clearViewReferences(): void {
+        this.jumpList = null;
         this.transcriptList = null;
         this.matchCount = null;
         this.resumeButton = null;
@@ -466,8 +528,12 @@ export class StudyPanel {
                 this.setNotice(null);
                 return true;
             },
-            () => {
-                this.setNotice(SAVE_FAILED_MESSAGE);
+            (error: unknown) => {
+                this.setNotice(
+                    error instanceof BookmarkLimitError || error instanceof NoteLimitError
+                        ? error.message
+                        : SAVE_FAILED_MESSAGE,
+                );
                 return false;
             },
         );
@@ -582,10 +648,15 @@ export class StudyPanel {
 
         this.clearViewReferences();
         content.replaceChildren();
-        content.hidden = this.view === 'side';
+        content.hidden = this.view === 'side' && this.layout !== 'panels';
         content.setAttribute('aria-labelledby', `youtube-side-tab-${this.view}`);
 
         switch (this.view) {
+            case 'side':
+                if (this.layout === 'panels') {
+                    this.renderPanelsHint(content);
+                }
+                break;
             case 'transcript':
                 this.renderTranscript(content);
                 break;
@@ -598,6 +669,22 @@ export class StudyPanel {
             default:
                 break;
         }
+    }
+
+    private renderPanelsHint(content: HTMLElement): void {
+        const transcript = actionButton('youtube-side-button youtube-side-pill', 'Transcript');
+        transcript.dataset.view = 'transcript';
+        const notes = actionButton('youtube-side-button youtube-side-pill', 'Notes');
+        notes.dataset.view = 'notes';
+        const actions = element('div', 'youtube-side-toolbar');
+        actions.append(transcript, notes);
+
+        content.append(
+            message(
+                "On this page YouTube shows the description and comments in its own panel, so they don't appear here. The transcript, chapters, and notes work as usual.",
+            ),
+            actions,
+        );
     }
 
     private renderTranscript(content: HTMLElement): void {
@@ -642,7 +729,10 @@ export class StudyPanel {
 
         this.matchCount = element('span', 'youtube-side-meta');
         this.matchCount.setAttribute('aria-live', 'polite');
-        toolbar.append(search, this.matchCount);
+        const quote = actionButton('youtube-side-button', 'Quote', 'quote-line');
+        quote.title = 'Quote the current line into Notes (Shift+click any line to quote it)';
+        quote.setAttribute('aria-label', 'Quote the current line into Notes');
+        toolbar.append(search, this.matchCount, quote);
         content.append(toolbar);
 
         const notes = [
@@ -898,12 +988,28 @@ export class StudyPanel {
 
         const textarea = element('textarea', 'youtube-side-input youtube-side-textarea');
         textarea.value = this.pendingNote?.videoId === videoId ? this.pendingNote.note : study.note;
-        textarea.placeholder = 'Write notes for this video…';
+        textarea.placeholder = 'Write notes for this video… Alt/Option+M inserts the current time.';
         textarea.maxLength = MAX_VIDEO_NOTE_LENGTH;
         textarea.setAttribute('aria-label', 'Notes for this video');
         textarea.addEventListener('input', () => {
             this.scheduleNoteSave(videoId, textarea.value);
+            this.renderJumps(textarea.value);
         });
+        textarea.addEventListener('keydown', (event) => {
+            if (isMarkShortcut(event)) {
+                event.preventDefault();
+                this.insertTimestamp(textarea);
+            }
+        });
+
+        const heading = element('div', 'youtube-side-bookmark-bar');
+        const insertTime = actionButton('youtube-side-button', '+ Time', 'insert-time');
+        insertTime.title = 'Insert the current time (Alt/Option+M)';
+        insertTime.setAttribute('aria-label', 'Insert the current time into the note');
+        heading.append(element('h3', 'youtube-side-heading', 'Notes'), insertTime);
+
+        this.jumpList = element('div', 'youtube-side-jumps');
+        this.jumpList.setAttribute('aria-label', 'Timestamps in the note');
 
         const exportBar = element('div', 'youtube-side-export');
         exportBar.append(
@@ -911,7 +1017,90 @@ export class StudyPanel {
             actionButton('youtube-side-button', 'Download .md', 'download-markdown'),
         );
 
-        content.append(element('h3', 'youtube-side-heading', 'Notes'), textarea, exportBar);
+        content.append(heading, textarea, this.jumpList, exportBar);
+        this.renderJumps(textarea.value);
+    }
+
+    /** The note's timestamps as buttons that seek, since a textarea cannot hold links. */
+    private renderJumps(note: string): void {
+        const list = this.jumpList;
+        if (!list) {
+            return;
+        }
+
+        const timestamps = findNoteTimestamps(note).slice(0, MAX_JUMPS);
+        list.hidden = timestamps.length === 0;
+        list.replaceChildren(
+            ...timestamps.map(({ timeMs, context }) => {
+                const time = formatTimestamp(timeMs);
+                const jump = actionButton('youtube-side-button youtube-side-jump', '');
+                jump.dataset.seek = String(timeMs);
+                jump.setAttribute('aria-label', `Seek to ${time}${context ? `: ${context}` : ''}`);
+                jump.append(element('span', 'youtube-side-time', time));
+                if (context) {
+                    jump.append(element('span', 'youtube-side-jump-text', context));
+                }
+                return jump;
+            }),
+        );
+    }
+
+    private currentPlaybackMs(): number | null {
+        const video = getMainVideo();
+        if (!video || isAdShowing()) {
+            return null;
+        }
+        return Math.round(video.currentTime * 1000);
+    }
+
+    private insertTimestamp(textarea: HTMLTextAreaElement): void {
+        const videoId = this.videoId;
+        const timeMs = this.currentPlaybackMs();
+        if (!videoId || timeMs === null) {
+            this.announce(
+                isAdShowing() ? 'The time is unavailable while an ad plays' : 'There is no video',
+            );
+            return;
+        }
+
+        const start = textarea.selectionStart;
+        const before = textarea.value.slice(0, start);
+        const text = `${before && !/\s$/.test(before) ? ' ' : ''}${noteTimestamp(timeMs)} `;
+        if (
+            textarea.value.length - (textarea.selectionEnd - start) + text.length >
+            MAX_VIDEO_NOTE_LENGTH
+        ) {
+            this.setNotice(new NoteLimitError().message);
+            return;
+        }
+
+        textarea.focus();
+        textarea.setRangeText(text, start, textarea.selectionEnd, 'end');
+        this.scheduleNoteSave(videoId, textarea.value);
+        this.renderJumps(textarea.value);
+        this.announce(`Inserted ${formatTimestamp(timeMs)}`);
+    }
+
+    private async quoteSegment(index: number, button?: HTMLElement): Promise<void> {
+        const videoId = this.videoId;
+        const segment = this.transcript?.segments[index];
+        if (!videoId || !segment) {
+            this.announce('Play to a line, or Shift+click a line, to quote it');
+            return;
+        }
+
+        // a note still waiting for its debounced save must land before the quote is appended
+        await this.flushNote();
+        const block = `> ${noteTimestamp(segment.startMs)} ${segment.text}`;
+        if (await this.persist(appendToNote(videoId, block, this.meta(videoId)))) {
+            this.announce(`Quoted ${formatTimestamp(segment.startMs)} into Notes`);
+            if (button) {
+                button.textContent = 'Quoted';
+                window.setTimeout(() => {
+                    button.textContent = 'Quote';
+                }, FEEDBACK_DELAY);
+            }
+        }
     }
 
     private buildField(
@@ -970,7 +1159,9 @@ export class StudyPanel {
         const pending = this.pendingNote;
         this.pendingNote = null;
         if (pending) {
-            await this.persist(setVideoNote(pending.videoId, pending.note));
+            await this.persist(
+                setVideoNote(pending.videoId, pending.note, this.meta(pending.videoId)),
+            );
         }
     }
 
@@ -991,29 +1182,38 @@ export class StudyPanel {
         this.updateTime(timeMs);
     }
 
-    private async captureBookmark(): Promise<void> {
+    /**
+     * Bookmarks the current moment, labelled with its chapter. Works while
+     * the panel is closed (Alt/Option+M); resolves a status line for the
+     * caller to show.
+     */
+    public async captureBookmark(): Promise<string> {
         const videoId = this.videoId;
         const video = getMainVideo();
+        let status: string;
         if (!videoId || !video) {
-            this.announce('There is no video to bookmark');
-            return;
-        }
-        if (isAdShowing()) {
-            this.announce('Bookmarks are unavailable while an ad plays');
-            return;
+            status = 'There is no video to bookmark';
+        } else if (isAdShowing()) {
+            status = 'Bookmarks are unavailable while an ad plays';
+        } else {
+            const timeMs = Math.round(video.currentTime * 1000);
+            if (this.chapterStatus !== 'ready') {
+                this.loadChapters();
+            }
+            const chapter = this.chapters?.[findCurrentSegmentIndex(this.chapters, timeMs)];
+            const label = chapter?.title ?? formatTimestamp(timeMs);
+
+            const saved = await this.persist(
+                addBookmark(videoId, timeMs, label, '', this.meta(videoId)),
+            );
+            status = saved
+                ? `Bookmarked ${formatTimestamp(timeMs)}`
+                : (this.notice?.textContent ?? SAVE_FAILED_MESSAGE);
+            this.refreshNotes(videoId);
         }
 
-        const timeMs = Math.round(video.currentTime * 1000);
-        if (this.chapterStatus !== 'ready') {
-            this.loadChapters();
-        }
-        const chapter = this.chapters?.[findCurrentSegmentIndex(this.chapters, timeMs)];
-        const label = chapter?.title ?? formatTimestamp(timeMs);
-
-        if (await this.persist(addBookmark(videoId, timeMs, label, ''))) {
-            this.announce(`Bookmarked ${formatTimestamp(timeMs)}`);
-        }
-        this.refreshNotes(videoId);
+        this.announce(status);
+        return status;
     }
 
     private async buildMarkdown(): Promise<string | null> {
@@ -1083,6 +1283,16 @@ export class StudyPanel {
             case 'bookmark':
                 void this.captureBookmark();
                 break;
+            case 'quote-line':
+                void this.quoteSegment(this.currentSegment, target);
+                break;
+            case 'insert-time': {
+                const textarea = this.content?.querySelector('textarea');
+                if (textarea) {
+                    this.insertTimestamp(textarea);
+                }
+                break;
+            }
             case 'load-transcript':
                 if (videoId) {
                     void this.runTranscriptLoad(videoId, (signal) =>
@@ -1129,7 +1339,12 @@ export class StudyPanel {
 
         const seekTarget = target.closest<HTMLElement>('[data-seek]');
         if (seekTarget) {
-            this.seekTo(Number(seekTarget.dataset.seek));
+            // Shift+click on a transcript line quotes it instead of seeking
+            if (event.shiftKey && seekTarget.dataset.index !== undefined) {
+                void this.quoteSegment(Number(seekTarget.dataset.index));
+            } else {
+                this.seekTo(Number(seekTarget.dataset.seek));
+            }
             return;
         }
 

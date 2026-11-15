@@ -102,6 +102,34 @@ export const resolveLayout = (request: LayoutRequest): LayoutDecision => {
     };
 };
 
+/**
+ * Keeps the panel off one of YouTube's own open side panels: when it would
+ * cover one, it takes the other edge if that one is free, and returns to the
+ * preferred edge once YouTube's panel closes.
+ */
+export const resolveSide = (input: {
+    left: boolean;
+    width: number;
+    viewportWidth: number;
+    youtubePanel: Rect | null;
+}): { left: boolean; dodged: boolean } => {
+    const { youtubePanel } = input;
+    if (!youtubePanel) {
+        return { left: input.left, dodged: false };
+    }
+
+    const covers = (left: boolean) => {
+        const start = left ? 0 : input.viewportWidth - input.width;
+        const end = left ? input.width : input.viewportWidth;
+        return youtubePanel.left < end && youtubePanel.right > start;
+    };
+
+    if (covers(input.left) && !covers(!input.left)) {
+        return { left: !input.left, dodged: true };
+    }
+    return { left: input.left, dodged: false };
+};
+
 export const resolveActivation = (input: {
     manualOverride: boolean | null;
     channelRule: ChannelRule | null;

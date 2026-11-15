@@ -1,4 +1,4 @@
-import type { PlayerContext, SuspendReason } from './context';
+import type { PlayerContext, SuspendReason, WatchLayout } from './context';
 import type { ChannelRule } from './options';
 
 export interface SideStatus {
@@ -7,6 +7,10 @@ export interface SideStatus {
     effectiveVisible?: boolean;
     suspendReason?: SuspendReason | null;
     context?: PlayerContext;
+    /** which watch layout YouTube served; `panels` is its experimental one */
+    layout?: WatchLayout;
+    /** the panel took the other edge to keep off one of YouTube's open side panels */
+    dodged?: boolean;
 }
 
 export type SideRequest =

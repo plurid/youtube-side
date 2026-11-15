@@ -1,6 +1,7 @@
 export type PlayerMode = 'default' | 'theater' | 'fullscreen' | 'miniplayer' | 'pip';
 export type VideoKind = 'standard' | 'live' | 'premiere' | 'unknown';
 export type SuspendReason = 'fullscreen' | 'miniplayer';
+export type WatchLayout = 'classic' | 'panels' | 'unknown';
 
 export interface Rect {
     top: number;

@@ -398,6 +398,7 @@ describe('Popup', () => {
                     ...DEFAULT_OPTIONS,
                     width: 640,
                     height: 720,
+                    customSize: true,
                 },
             });
         });
@@ -424,7 +425,7 @@ describe('Popup', () => {
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
                 version: OPTIONS_VERSION,
-                values: { ...DEFAULT_OPTIONS, width: 800 },
+                values: { ...DEFAULT_OPTIONS, width: 800, customSize: true },
             });
         });
 
@@ -443,7 +444,7 @@ describe('Popup', () => {
         await waitFor(() => {
             expect(mock.data[OPTIONS_KEY]).toEqual({
                 version: OPTIONS_VERSION,
-                values: { ...DEFAULT_OPTIONS, width: 320, height: 1200 },
+                values: { ...DEFAULT_OPTIONS, width: 320, height: 1200, customSize: true },
             });
         });
 
@@ -531,5 +532,51 @@ describe('Popup', () => {
         });
 
         expect(mock.setMock).not.toHaveBeenCalled();
+    });
+
+    test('saves the panel sections and bookmark markers, and opens the notes library', async () => {
+        const mock = createChromeMock({
+            [OPTIONS_KEY]: { version: OPTIONS_VERSION, values: DEFAULT_OPTIONS },
+        });
+        render(<Popup />);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'comments' }));
+        fireEvent.click(screen.getByRole('button', { name: 'live chat' }));
+        fireEvent.click(screen.getByRole('button', { name: 'description' }));
+        fireEvent.click(screen.getByRole('button', { name: 'bookmarks on the progress bar' }));
+
+        await waitFor(() => {
+            expect(mock.data[OPTIONS_KEY]).toEqual({
+                version: OPTIONS_VERSION,
+                values: {
+                    ...DEFAULT_OPTIONS,
+                    showComments: false,
+                    showChat: false,
+                    showDescription: false,
+                    bookmarkMarkers: false,
+                },
+            });
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: 'notes library' }));
+        expect(mock.createTabMock).toHaveBeenCalledWith({
+            url: 'chrome-extension://test/library.html',
+        });
+    });
+
+    test('says when YouTube serves its new layout or the panel stepped aside', async () => {
+        const mock = createChromeMock({
+            [OPTIONS_KEY]: { version: OPTIONS_VERSION, values: DEFAULT_OPTIONS },
+        });
+        mock.sendMessageMock.mockResolvedValue({
+            ok: true,
+            status: { active: true, available: true, layout: 'panels', dodged: true },
+        });
+        render(<Popup />);
+
+        expect(
+            await screen.findByText(/new layout keeps the description and comments/),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/Moved to the other side/)).toBeInTheDocument();
     });
 });

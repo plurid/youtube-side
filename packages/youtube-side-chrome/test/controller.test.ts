@@ -415,6 +415,7 @@ describe('YouTubeSideController', () => {
                 ...DEFAULT_OPTIONS,
                 width: 800,
                 height: 700,
+                customSize: true,
             },
         });
         controller.stop();
@@ -787,11 +788,26 @@ describe('YouTubeSideController', () => {
         await mock.chrome.storage.local.set({
             [OPTIONS_KEY]: {
                 version: OPTIONS_VERSION,
-                values: { ...DEFAULT_OPTIONS, layoutAnchor: 'player', height: 700 },
+                values: {
+                    ...DEFAULT_OPTIONS,
+                    layoutAnchor: 'player',
+                    height: 700,
+                    customSize: true,
+                },
             },
         });
         await flushLayout();
         expect(below.style.getPropertyValue('--youtube-side-height')).toBe('700px');
+
+        // reset clears the custom size, and the panel follows the player again
+        await mock.chrome.storage.local.set({
+            [OPTIONS_KEY]: {
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, layoutAnchor: 'player' },
+            },
+        });
+        await flushLayout();
+        expect(below.style.getPropertyValue('--youtube-side-height')).toBe('480px');
         controller.stop();
     });
 
@@ -805,5 +821,232 @@ describe('YouTubeSideController', () => {
         controller.setActive(true);
         await flushLayout();
         expect(document.getElementById('youtube-side-study')).toBeNull();
+    });
+
+    describe('new in 1.1.0', () => {
+        const addPlayer = (duration: number) => {
+            document
+                .querySelector('ytd-app')
+                ?.insertAdjacentHTML(
+                    'afterbegin',
+                    '<div id="movie_player" class="html5-video-player"><div class="ytp-progress-bar"></div></div>',
+                );
+            const player = document.getElementById('movie_player') as HTMLElement;
+            const video = document.createElement('video');
+            Object.defineProperty(video, 'duration', { configurable: true, value: duration });
+            Object.defineProperty(video, 'currentTime', {
+                configurable: true,
+                writable: true,
+                value: 42,
+            });
+            player.append(video);
+            return { player, video };
+        };
+
+        test('Alt+M bookmarks the moment with the panel closed and shows a toast', async () => {
+            window.history.pushState({}, '', '/watch?v=markVideo01');
+            const { player } = addPlayer(600);
+            const controller = new YouTubeSideController();
+            await controller.start();
+
+            pressShortcut('KeyM');
+            await settleDebounce();
+
+            expect(controller.getState().active).toBe(false);
+            const stored = mock.data['youtubeSideStudy:markVideo01'] as {
+                bookmarks: { timeMs: number }[];
+            };
+            expect(stored.bookmarks.map((bookmark) => bookmark.timeMs)).toEqual([42_000]);
+            expect(player.querySelector('.youtube-side-toast')?.textContent).toBe(
+                'Bookmarked 0:42',
+            );
+            // the new bookmark shows on the progress bar
+            await flushLayout();
+            controller.setActive(true);
+            await flushLayout();
+            expect(player.querySelectorAll('.youtube-side-markers-tick')).toHaveLength(1);
+
+            // ignored with study mode off, and away from a watch page
+            mock.setMock.mockClear();
+            await mock.chrome.storage.local.set({
+                [OPTIONS_KEY]: {
+                    version: OPTIONS_VERSION,
+                    values: { ...DEFAULT_OPTIONS, studyEnabled: false },
+                },
+            });
+            mock.setMock.mockClear();
+            pressShortcut('KeyM');
+            window.history.pushState({}, '', '/feed/subscriptions');
+            pressShortcut('KeyM');
+            await settleDebounce();
+            expect(mock.setMock).not.toHaveBeenCalled();
+            controller.stop();
+        });
+
+        test('hides the description, comments, and live chat only while the panel is shown', async () => {
+            mock.data[OPTIONS_KEY] = {
+                version: OPTIONS_VERSION,
+                values: {
+                    ...DEFAULT_OPTIONS,
+                    showDescription: false,
+                    showComments: false,
+                    showChat: false,
+                },
+            };
+            const controller = new YouTubeSideController();
+            await controller.start();
+            const below = document.getElementById('below') as HTMLElement;
+            const chat = document.getElementById('chat-container') as HTMLElement;
+
+            await flushLayout();
+            expect(below.hasAttribute('data-youtube-side-hide')).toBe(false);
+            expect(chat.dataset.youtubeSideHidden).toBeUndefined();
+
+            controller.setActive(true);
+            await flushLayout();
+            expect(below.getAttribute('data-youtube-side-hide')).toBe('description comments');
+            expect(chat.dataset.youtubeSideHidden).toBe('true');
+
+            controller.setActive(false);
+            await flushLayout();
+            expect(below.hasAttribute('data-youtube-side-hide')).toBe(false);
+            expect(chat.dataset.youtubeSideHidden).toBeUndefined();
+            controller.stop();
+        });
+
+        test('closes a panel a rule opened on the next video the rule does not match', async () => {
+            window.history.pushState({}, '', '/watch?v=liveVideo01');
+            mock.data[OPTIONS_KEY] = {
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, autoActivate: 'live' },
+            };
+            const { video } = addPlayer(Number.POSITIVE_INFINITY);
+            const controller = new YouTubeSideController();
+            await controller.start();
+            await flushLayout();
+            expect(controller.getState().active).toBe(true);
+
+            // before the next video's kind is known, the panel stays
+            window.history.pushState({}, '', '/watch?v=plainVideo1');
+            Object.defineProperty(video, 'duration', { configurable: true, value: Number.NaN });
+            document.dispatchEvent(new Event('yt-navigate-finish'));
+            await flushLayout();
+            expect(controller.getState().active).toBe(true);
+
+            Object.defineProperty(video, 'duration', { configurable: true, value: 300 });
+            video.dispatchEvent(new Event('durationchange'));
+            await flushLayout();
+            expect(controller.getState().active).toBe(false);
+
+            // a panel the user opened stays open across videos
+            pressShortcut('KeyS');
+            window.history.pushState({}, '', '/watch?v=plainVideo2');
+            document.dispatchEvent(new Event('yt-navigate-finish'));
+            await flushLayout();
+            expect(controller.getState().active).toBe(true);
+            controller.stop();
+        });
+
+        test('keeps a custom size after a reload, and follows the player once reset', async () => {
+            mock.data[OPTIONS_KEY] = {
+                version: OPTIONS_VERSION,
+                values: {
+                    ...DEFAULT_OPTIONS,
+                    layoutAnchor: 'player',
+                    height: 700,
+                    customSize: true,
+                },
+            };
+            const { player } = addPlayer(600);
+            Object.defineProperty(player, 'getBoundingClientRect', {
+                configurable: true,
+                value: () => ({
+                    top: 80,
+                    left: 0,
+                    right: 900,
+                    bottom: 560,
+                    width: 900,
+                    height: 480,
+                }),
+            });
+            Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1000 });
+
+            const controller = new YouTubeSideController();
+            await controller.start();
+            controller.setActive(true);
+            await flushLayout();
+            const below = document.getElementById('below') as HTMLElement;
+            expect(below.style.getPropertyValue('--youtube-side-height')).toBe('700px');
+
+            await mock.chrome.storage.local.set({
+                [OPTIONS_KEY]: {
+                    version: OPTIONS_VERSION,
+                    values: { ...DEFAULT_OPTIONS, layoutAnchor: 'player' },
+                },
+            });
+            await flushLayout();
+            expect(below.style.getPropertyValue('--youtube-side-height')).toBe('480px');
+            controller.stop();
+        });
+
+        test("steps aside from YouTube's open side panel, and reports the layout", async () => {
+            Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
+            mock.data[OPTIONS_KEY] = {
+                version: OPTIONS_VERSION,
+                values: { ...DEFAULT_OPTIONS, left: false },
+            };
+            const below = document.getElementById('below') as HTMLElement;
+            below.innerHTML =
+                '<ytd-watch-metadata><h1>Title</h1><div id="description"></div></ytd-watch-metadata>';
+            document.querySelector('ytd-app')?.insertAdjacentHTML(
+                'beforeend',
+                `<ytd-watch-flexy><div id="panels">
+                    <ytd-engagement-panel-section-list-renderer visibility="ENGAGEMENT_PANEL_VISIBILITY_HIDDEN"></ytd-engagement-panel-section-list-renderer>
+                </div></ytd-watch-flexy>`,
+            );
+            const panel = document.querySelector(
+                'ytd-engagement-panel-section-list-renderer',
+            ) as HTMLElement;
+            Object.defineProperty(panel, 'getBoundingClientRect', {
+                configurable: true,
+                value: () => ({
+                    top: 56,
+                    left: 1200,
+                    right: 1600,
+                    bottom: 900,
+                    width: 400,
+                    height: 844,
+                }),
+            });
+
+            const controller = new YouTubeSideController();
+            await controller.start();
+            controller.setActive(true);
+            await flushLayout();
+            expect(below.dataset.youtubeSidePosition).toBe('right');
+            expect(below.dataset.youtubeSideLayout).toBe('classic');
+            expect(controller.getState()).toMatchObject({ layout: 'classic', dodged: false });
+
+            panel.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED');
+            await flushLayout();
+            await flushLayout();
+            expect(below.dataset.youtubeSidePosition).toBe('left');
+            expect(controller.getState().dodged).toBe(true);
+
+            panel.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_HIDDEN');
+            await flushLayout();
+            await flushLayout();
+            expect(below.dataset.youtubeSidePosition).toBe('right');
+
+            // YouTube's experimental layout: only the title block stays in #below
+            below.querySelector('#description')?.remove();
+            window.dispatchEvent(new Event('resize'));
+            await flushLayout();
+            expect(controller.getState().layout).toBe('panels');
+            expect(document.getElementById('youtube-side-study-content')?.textContent).toContain(
+                'YouTube shows the description and comments in its own panel',
+            );
+            controller.stop();
+        });
     });
 });

@@ -1,6 +1,6 @@
 # YouTube Side: how it works
 
-YouTube Side is a Manifest V3 Chrome extension that lifts the YouTube watch page's details panel (description, comments, and live chat) beside the video, so it can be read without scrolling away from the picture. On top of that it adds a **study mode** (transcript, chapters, bookmarks, and notes inside the same panel) and an **adaptive layout** (player-anchored geometry, automatic suspension in fullscreen and the miniplayer, and opt-in activation rules).
+YouTube Side is a Manifest V3 Chrome extension that lifts the YouTube watch page's details panel (description, comments, and live chat) beside the video, so it can be read without scrolling away from the picture. On top of that it adds a **study mode** (transcript, chapters, bookmarks, and notes inside the same panel, bookmark ticks on the progress bar, and a notes library page) and an **adaptive layout** (player-anchored geometry, automatic suspension in fullscreen and the miniplayer, opt-in activation rules, and stepping aside from YouTube's own side panels).
 
 YouTube stays the data source. The extension repositions and annotates YouTube's own content; it does not host or re-render it.
 
@@ -27,24 +27,27 @@ docs/ARCHITECTURE.md              this document
 about/                            logo, promo art, store listing text and screenshots
 packages/youtube-side-chrome/
   source/
-    manifest.json                 MV3 manifest (storage permission only)
+    manifest.json                 MV3 manifest (storage and unlimitedStorage only)
     contentscript/
       index.ts                    entry: starts the controller
       controller.ts               lifecycle, layout pass, shortcuts, messaging, activation
       page.ts                     YouTube page adapter (selectors, player, metadata freshness)
       player.ts                   pure layout, activation, and preset resolution; context derivation
       styles.ts                   the injected stylesheet and attribute and property names
+      toast.ts                    the status line over the player (Alt+M)
       study/
-        studyPanel.ts             study UI (tabs, transcript, chapters, notes, export)
+        studyPanel.ts             study UI (tabs, transcript, chapters, notes, quotes, export)
+        markers.ts                bookmark ticks on YouTube's progress bar
         transcript.ts             transcript sources, parsing, search, cache
         chapters.ts               chapter sources and parsing
-        studyStore.ts             queued reads and writes of bookmarks and notes
-    data/                         shared by the popup and the content script
+    data/                         shared by the content script, the popup, and the library
       options.ts                  options schema, defaults, normalization, migrations, write queue
-      study.ts                    study data schema, normalization, Markdown export
+      study.ts                    study record schema, normalization, merging, backups, Markdown
+      studyStore.ts               one key per video: queued reads and writes, change subscriptions
       messages.ts                 popup <-> page protocol and validators
       context.ts                  PlayerContext and related types
-    popup/                        React popup (settings, side toggle, channel rule)
+    popup/                        React popup (settings, side toggle, channel rule, library link)
+    library/                      React notes library page (library.html)
     common/                       logging, error boundary, active-tab helper
   test/                           Jest + jsdom tests, Chrome API mock
   scripts/                        clean, package (zip), verify-build (allowlist and budgets)
@@ -55,13 +58,15 @@ packages/youtube-side-chrome/
 
 ```text
  popup (React)  -- chrome.tabs.sendMessage -->  content script (one per YouTube tab)
-       |                                                |
-       +-------- chrome.storage.local <-----------------+
-                 youtubeSideOptions (settings, shared by all tabs)
-                 youtubeSideStudy   (bookmarks and notes)
+       |      \                                         |
+       |       chrome.tabs.create --> library.html      |
+       |                                 |              |
+       +-------- chrome.storage.local <--+--------------+
+                 youtubeSideOptions             settings, shared by all tabs
+                 youtubeSideStudy:<videoId>     one video's bookmarks and notes
 ```
 
-There is no background worker. Shortcuts are handled inside each page, so a tab can only change itself; settings changes reach every tab through `chrome.storage.onChanged`.
+There is no background worker. Shortcuts are handled inside each page, so a tab can only change itself; settings and notes changes reach every page through `chrome.storage.onChanged`. The popup and the library share one `shared.js` chunk (React and styled-components); the content script is always a single dependency-free file.
 
 ### The layout pass
 
@@ -72,9 +77,13 @@ All visual state is applied in one `requestAnimationFrame`-coalesced pass, `YouT
 3. `resolveOptions()` overlays the `standard`, `live`, and `theater` presets on the stored options.
 4. `resolveLayout()`, a pure function, decides visibility and geometry. Fullscreen and the miniplayer suspend the panel (state is kept, so leaving restores it exactly). The viewport anchor sits under the 56 px masthead. The player anchor aligns to the player and takes its height unless the user chose a size (by dragging or in the popup). A size derived from the player is only ever written to CSS variables, never to storage.
 5. The controller writes attributes and CSS variables to `#below`, then measures the rendered panel and cancels any offset its ancestors introduce (`--youtube-side-offset-x` and `-y`), so it sits flush with the chosen edge.
-6. The study panel is mounted (idempotently) or unmounted.
+6. The study panel is mounted (idempotently) or unmounted, and the bookmark markers follow the progress bar.
 
-Other pieces of the pass: the right-side panel uses `direction: rtl` so the native resize handle faces the page; the live chat container is positioned against the panel; the recommendations column can be hidden; and in **auto invert** mode a sampler draws the video region behind the panel into a 32×32 canvas every 700 ms and inverts the panel's colors above 0.6 luminance, reverting below 0.45 after two agreeing samples. Dragging the panel's resize handle is committed to the width and height options after 200 ms.
+Before the geometry is resolved, `resolveSide()` checks YouTube's own side panels (`ytd-engagement-panel-section-list-renderer` expanded: its transcript, chapters, comments, or description panel). When the panel would cover one and the other edge is free, it takes the other edge until YouTube's panel closes; the stored side does not change. An observer on `#panels` watches only their `visibility` attribute. A transcript panel the extension opens briefly to read is ignored, and so is the ad companion panel YouTube opens by itself while an ad plays (`target-id="engagement-panel-ads"`).
+
+`detectWatchLayout()` reports `classic` when `#below` holds the description or the comments and `panels` when only the title block is there (YouTube's experimental layout). The layout is written to `data-youtube-side-layout`, reported to the popup, and in `panels` the Side view explains where the description and comments went.
+
+Other pieces of the pass: the right-side panel uses `direction: rtl` so the native resize handle faces the page; the live chat container is positioned against the panel; the description, the comments, and the live chat can each be hidden while the panel is shown (`data-youtube-side-hide` and the chat's `data-youtube-side-hidden`), and the recommendations column can be hidden at any time; and in **auto invert** mode a sampler draws the video region behind the panel into a 32×32 canvas every 700 ms and inverts the panel's colors above 0.6 luminance, reverting below 0.45 after two agreeing samples. Dragging the panel's resize handle is committed to the width and height options after 200 ms, together with `customSize`, so a player-anchored panel keeps that size across reloads; reset clears it.
 
 Colors come from the panel's own light and dark palettes, chosen by YouTube's `html[dark]` attribute; YouTube no longer exposes its `--yt-spec-*` color variables on the page.
 
@@ -96,7 +105,7 @@ YouTube navigates in-page. Measured on live pages:
 3. the global **auto-activate** setting (`never`, `live`, `long` for videos of 20 minutes or more, `always`),
 4. otherwise leave the panel as it is.
 
-It runs on navigation, when page data becomes current, on `durationchange`, and on settings changes. While a pre-roll ad plays (`#movie_player.ad-showing`) the video's duration is treated as unknown, so an ad never counts as a long video.
+It runs on navigation, when page data becomes current, on `durationchange`, and on settings changes. While a pre-roll ad plays (`#movie_player.ad-showing`) the video's duration is treated as unknown, so an ad never counts as a long video. A panel that a rule opened closes again on a video the rule does not match, once that video's kind is known; a panel the user opened stays open.
 
 ### Study mode
 
@@ -113,7 +122,11 @@ If none works the view says so; if YouTube's own panel failed, it offers a retry
 
 **Chapters** come from YouTube's chapter markers, preferring the chapters panel copy and de-duplicating by start time, with timestamped description lines (at least two, strictly increasing) as a fallback.
 
-**Bookmarks and notes** are stored per video under `youtubeSideStudy` through a serialized write queue. A bookmark's `createdAt` is its id. The video note saves 500 ms after typing stops, bound to the video it was typed on. Exports flush pending edits first and contain only user-authored data. A rejected storage write shows a notice in the panel.
+**Bookmarks and notes** are stored one key per video (`youtubeSideStudy:<videoId>`) through a serialized write queue, with the video's title and channel once the page shows them. A bookmark's `createdAt` is its id. The video note and bookmark fields save 500 ms after typing stops, bound to the video they were typed on, so an edit survives autoplay moving to the next video. Alt/Option+M bookmarks the moment from anywhere on the page, with the panel open or closed, and shows a status line over the player; inside the note it inserts `[m:ss]` at the caret instead. The note's timestamps are listed under it as buttons that seek. In the Transcript view, Quote appends the current line to the note as `> [m:ss] text`, and Shift+click quotes any line. Each page tags its writes, so a Notes view redraws for changes from another tab or the library but never for its own saves, and never while focus is inside it. Exports flush pending edits first and contain only user-authored data; bracketed note timestamps become links. A rejected storage write shows a notice in the panel; a full video says so instead of dropping a bookmark.
+
+**Bookmark markers** (`markers.ts`) draw a 3 px tick per bookmark inside `#movie_player .ytp-progress-bar`, above YouTube's chapters and below its scrubber, ignoring the pointer. They follow the current video's storage key, and are hidden while an ad plays and for live streams. PluriSpeed draws its speaker strip under the bar, so the two do not overlap.
+
+**The notes library** (`library.html`, opened from the popup) lists every stored video newest first, with search over titles, channels, notes, and bookmarks (case- and accent-insensitive). It exports the shown videos as one Markdown file, backs everything up as JSON (`{ format: "youtube-side-notes", version: 2, exportedAt, videos }`), and restores a backup by merging: bookmarks are joined, and a note is kept, replaced by a longer one that contains it, or appended, so restoring the same file twice changes nothing. Deleting takes a second click. It reloads when any page saves notes.
 
 **Keyboard.** Tabs follow the ARIA tabs pattern (arrow keys, Home, End, roving `tabindex`). YouTube's player shortcuts listen on the page, so the panel keeps Space, Enter, the arrow keys, Page Up and Page Down, Home, and End from leaving its focused buttons; Alt shortcuts and other keys pass through. Changes are announced through a polite live region.
 
@@ -146,13 +159,16 @@ The status is `{ active, available, effectiveVisible, suspendReason, context }`.
 | `autoActivate` | `never` | `never`, `live`, `long`, `always` |
 | `presets` | `{}` | `standard`, `live`, `theater` partial overlays, clamped like the base values |
 | `channelRules` | `{}` | channel path to `always` or `never`, at most 100 |
+| `customSize` | `false` | the user sized the panel; a player-anchored panel keeps that height |
+| `showDescription`, `showComments`, `showChat` | `true` | panel sections, applied while the panel is shown |
 | `studyEnabled` | `true` | show the study header |
 | `studyFollow` | `true` | follow the transcript by default |
 | `studyAutoOpen` | `off` | `off`, `transcript`, `chapters` when auto-activation opens the panel |
+| `bookmarkMarkers` | `true` | bookmark ticks on the progress bar |
 
 Older shapes are migrated on read: unversioned values and version 1 (boolean `blurred` becomes blur 5 or 0, boolean `invertText` becomes `on`), and version 2 (all version 3 fields are additions with defaults). Downgrading to a build that predates version 3 resets settings to defaults.
 
-**`youtubeSideStudy`**, stored as `{ version: 1, videos: { [videoId]: { bookmarks, note, updatedAt } } }`: at most 50 videos (least recently updated evicted; a video whose note and bookmarks are all cleared is removed, so it never takes a slot), 200 bookmarks per video, labels up to 200 characters, bookmark notes up to 2,000, video notes up to 10,000.
+**`youtubeSideStudy:<videoId>`**, one key per video, stored as `{ version: 2, bookmarks, note, title, channel, updatedAt, writer }`. There is no limit on the number of videos: each save writes only its own video, and the `unlimitedStorage` permission lifts Chrome's 10 MB quota for extension storage (it shows no install warning). Per video: 1,000 bookmarks, labels up to 200 characters, bookmark notes up to 5,000, the video note up to 100,000, title 300, channel 200. A video whose note and bookmarks are all cleared is removed. `writer` identifies the page that saved it, so a page can tell its own changes from others'.
 
 ## YouTube facts the code relies on
 
@@ -167,10 +183,14 @@ Verified on live watch pages on 2026-11-10. When something breaks after a YouTub
 | `#movie_player.ad-showing`; ads play in the main `<video>` | ignore ad durations, block seek and bookmark | `page.ts` |
 | `#movie_player .ytp-live` | live detection (sidebar badges must be ignored) | `page.ts` |
 | `ytd-watch-metadata ytd-video-owner-renderer a[href]` | channel key | `page.ts` |
+| `ytd-watch-metadata #channel-name a` text | channel name for the library | `page.ts` |
+| `#below ytd-watch-metadata #description` and `#below ytd-comments#comments` | panel sections; the classic layout | `styles.ts`, `page.ts` |
+| `ytd-watch-flexy #panels` holds `ytd-engagement-panel-section-list-renderer[visibility]`; an ad expands `engagement-panel-ads` | stepping aside from YouTube's side panels | `page.ts` |
+| some videos open a transcript panel with no `target-id` (it holds the transcript rows); its close button is `#visibility-button button` | closing exactly the panels the extension opened | `transcript.ts` |
+| `#movie_player .ytp-progress-bar` holds `.ytp-chapters-container` and `.ytp-scrubber-container` | bookmark markers | `page.ts`, `styles.ts` |
 | caption `baseUrl`s carry `exp=xpe` and need a player-minted `pot` token | skip token-bound caption files | `transcript.ts` |
 | `ytd-video-description-transcript-section-renderer button` opens the transcript | transcript source 4 | `transcript.ts` |
 | `transcript-segment-view-model` rows with `.ytwTranscriptSegmentViewModelTimestamp` and `.ytAttributedStringHost` (legacy `ytd-transcript-segment-renderer` still read) | reading the transcript panel | `transcript.ts` |
-| transcript panels: `target-id` contains `transcript`; close with `#visibility-button button` | panel state and restore | `transcript.ts` |
 | `ytd-macro-markers-list-item-renderer` with `#time` and `h3.macro-markers[title]`, rendered up to three times | chapters | `chapters.ts` |
 | YouTube's player shortcuts listen on the page, not only on the player | keeping panel keys local | `studyPanel.ts` |
 | the theme is `html[dark]`; YouTube's `--yt-spec-*` color variables no longer exist on the page | the panel's own light and dark palettes | `styles.ts` |
@@ -189,7 +209,7 @@ pnpm screenshots  # builds, then writes 1280x800 store screenshots to about/imag
 - **Unit tests** run in Jest + jsdom with a Chrome API mock (`test/chrome.ts`). Global coverage must stay at or above 85 % for statements, branches, functions, and lines. Parsers are tested against markup recorded from live pages, not against YouTube itself.
 - **Live checks** (`scripts/live/`) load the built extension into the installed Google Chrome with Puppeteer and walk through activation, transcript, search, keyboard handling, notes, theater, chapters after navigation, the miniplayer, and deactivation on real watch pages. They need network access, depend on YouTube's current markup and on which ads play, and are not part of `pnpm check`. Set `CHROME_PATH` to use another Chrome binary, `HEADFUL=1` to watch the run, and `LIVE_LECTURE_VIDEO` or `LIVE_CHAPTERED_VIDEO` to test other videos.
 - **Store screenshots** (`pnpm screenshots`) render six 1280×800 scenes from the built extension. Each attempt uses a fresh profile; a scene is retried when an ad or player error shows, when the frame is not at the requested moment, or when YouTube serves its experimental layout. Ads, sponsored cards, the merch shelf, and off-topic recommendations are hidden. `SCREENSHOTS_ONLY=2,4` regenerates only the named scenes.
-- **Budgets** (`scripts/verify-build.mjs`): `contentscript.js` at most 70 KB raw and 24 KB gzip, `popup.js` at most 450 KB and 140 KB, archive at most 220 KB. The content script is about 55 KB and 16 KB, so there is hotfix room; the stylesheet text is the first place to trim if more is needed. The popup font is bundled under `source/assets/fonts/`, so extension pages make no network requests.
+- **Budgets** (`scripts/verify-build.mjs`): `contentscript.js` at most 70 KB raw and 24 KB gzip; `shared.js` (React and styled-components, loaded by the popup and the library) 260 KB and 85 KB; `popup.js` 300 KB and 90 KB; `library.js` 60 KB and 20 KB; archive at most 220 KB. The content script is about 63 KB and 19 KB, so there is still hotfix room; the stylesheet text is the first place to trim if more is needed. The font is bundled under `source/assets/fonts/`, so extension pages make no network requests.
 - **Versions:** the manifest `version` is the Chrome Web Store lineage and must strictly increase on every upload; it is independent of the npm package version.
 - **Local testing:** `pnpm build`, then load `distribution/` with **Load unpacked** in `chrome://extensions`.
 - **Store listing:** the description, permission justifications, and privacy answers live in `about/store-listing.md`; upload `distribution-zip/youtube-side-v<version>.zip`.
@@ -201,13 +221,15 @@ Release checklist on real YouTube, signed in, in a normal Chrome profile (the au
 - theater on and off repeatedly, fullscreen and the miniplayer with the panel open, picture-in-picture;
 - auto-activation rules and a channel `never` rule over a global `always`;
 - a screen-reader pass through the study tabs and bookmarks;
+- Alt+M in fullscreen (the status line shows inside the player) and the bookmark marks with PluriSpeed's speaker strip enabled on the same video;
+- the notes library: a backup saved in one profile and restored in another, then restored again (nothing doubles);
 - the store build and a local build installed together.
 
 ## Known limitations
 
 - Transcripts depend on YouTube: most caption files need a token only the player can create, so the transcript usually comes from YouTube's own panel, which opens briefly while it is read. If YouTube cannot load it, the Transcript view offers a retry.
 - Chapters exist only where YouTube shows chapter markers or the description lists timestamps.
-- YouTube is testing a watch layout (seen in some fresh visitor sessions in November 2026) that moves the description and comments out of `#below` into its own panel beside the video, with Description and Comments buttons in a rail on the right. There the Side view shows only the title block, and a right-side panel covers YouTube's comments panel; the study views work as usual. If that layout becomes the default, the Side view needs a new approach.
+- YouTube is testing a watch layout (seen in some fresh visitor sessions in November 2026) that moves the description and comments out of `#below` into its own panel beside the video, with Description and Comments buttons in a rail on the right. Its markup has not been recorded yet: nine fresh sessions probed on 2026-11-15 all served the classic layout. The extension prepares for it without depending on its markup: `detectWatchLayout()` reports `panels` when `#below` holds only the title block, the Side view then says where the description and comments went and points to the study views, and the panel steps aside from YouTube's side panel when that panel is one of its engagement panels. If the layout hides the description in place rather than moving it, detection stays `classic`, which is today's behavior. When the layout is next seen, record its markup into a test fixture, confirm the detection and the dodge, and consider restyling YouTube's own panel in place as the Side view there.
 - In automated, logged-out browsers YouTube does not stream ranges past the initial buffer, so seeking far ahead stalls there for YouTube's own controls and the extension alike; the live checks avoid long seeks, and the release checklist covers seeking during real playback.
 - The panel cannot appear inside fullscreen: only the fullscreen element's subtree is rendered, so the panel suspends instead.
 
@@ -217,6 +239,5 @@ Not implemented; listed so the ideas are not lost.
 
 1. **Custom shortcuts** through `chrome.commands`, with a small worker relaying commands to the active YouTube tab.
 2. **Docking layouts:** overlay and push-content layouts next to today's floating panel.
-3. **Focus controls:** show or hide recommendations, live chat, description, and comments independently.
-4. **Cross-device settings:** `chrome.storage.sync` as a second storage adapter, with local fallback and an explicit migration.
-5. **Accessible in-page control:** an optional keyboard-accessible handle with status announcements and reduced-motion behavior.
+3. **Cross-device settings:** `chrome.storage.sync` as a second storage adapter, with local fallback and an explicit migration.
+4. **Accessible in-page control:** an optional keyboard-accessible handle with status announcements and reduced-motion behavior.

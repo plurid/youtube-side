@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 
 import { StudyPanel } from '~contentscript/study/studyPanel';
 import { clearTranscriptCache } from '~contentscript/study/transcript';
-import { STUDY_STORAGE_KEY, type StudyData } from '~data/study';
+import { type VideoStudy, videoIdFromKey } from '~data/study';
 import { type ChromeMock, createChromeMock } from './chrome';
 
 const wait = (ms = 20) =>
@@ -45,7 +45,17 @@ const buttonNamed = (text: string) =>
     Array.from(document.querySelectorAll('button')).find((button) =>
         button.textContent?.includes(text),
     ) as HTMLButtonElement;
-const storedStudy = (mock: ChromeMock) => mock.data[STUDY_STORAGE_KEY] as StudyData | undefined;
+/** Every stored video, read back from its own key; undefined when nothing is stored. */
+const storedStudy = (mock: ChromeMock) => {
+    const videos: Record<string, VideoStudy> = {};
+    for (const [key, value] of Object.entries(mock.data)) {
+        const videoId = videoIdFromKey(key);
+        if (videoId) {
+            videos[videoId] = value as VideoStudy;
+        }
+    }
+    return Object.keys(videos).length > 0 ? { videos } : undefined;
+};
 
 describe('StudyPanel', () => {
     let below: HTMLElement;
@@ -626,5 +636,139 @@ describe('StudyPanel', () => {
 
         panel.showYouTubeTranscript();
         expect(content().textContent).toContain('Opened by the user');
+    });
+
+    describe('notes tools', () => {
+        const loadTranscript = async (videoId: string) => {
+            fetchMock.mockResolvedValue(
+                json3([
+                    [0, 'Opening words'],
+                    [12_000, 'The key idea'],
+                    [20_000, 'Closing words'],
+                ]),
+            );
+            const script = document.createElement('script');
+            script.textContent = timedtextScript(videoId);
+            document.body.append(script);
+
+            const panel = new StudyPanel({ follow: false });
+            panel.mount(below, videoId);
+            panel.setView('transcript');
+            await wait();
+            return panel;
+        };
+        const rows = () => document.querySelectorAll<HTMLElement>('.youtube-side-transcript-row');
+        const noteOf = (videoId: string) => storedStudy(mock)?.videos[videoId]?.note;
+
+        it('quotes the current line, or a Shift+clicked one, into the note with its time', async () => {
+            const panel = await loadTranscript('vidQuote01');
+            panel.updateTime(15_000);
+            buttonNamed('Quote').click();
+            await wait();
+            expect(noteOf('vidQuote01')).toBe('> [0:12] The key idea');
+            expect(buttonNamed('Quoted')).toBeDefined();
+
+            rows()[2]?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+            await wait();
+            expect(noteOf('vidQuote01')).toBe('> [0:12] The key idea\n\n> [0:20] Closing words');
+            // Shift+click quotes instead of seeking
+            expect(video.currentTime).toBe(15);
+        });
+
+        it('says what to do when there is no line to quote', async () => {
+            const panel = await loadTranscript('vidQuote02');
+            panel.updateTime(-1);
+            buttonNamed('Quote').click();
+            await wait();
+            expect(noteOf('vidQuote02')).toBeUndefined();
+            expect(query('[role="status"]').textContent).toContain('Shift+click a line');
+        });
+
+        it('inserts the current time at the caret, by button or Alt+M, and lists jumps', async () => {
+            const panel = new StudyPanel();
+            panel.mount(below, 'vidTime001');
+            panel.setView('notes');
+            await wait();
+
+            const textarea = query<HTMLTextAreaElement>('textarea');
+            textarea.value = 'Intro';
+            textarea.setSelectionRange(5, 5);
+            video.currentTime = 83;
+            buttonNamed('+ Time').click();
+            expect(textarea.value).toBe('Intro [1:23] ');
+
+            textarea.setRangeText(
+                'first point\n',
+                textarea.value.length,
+                textarea.value.length,
+                'end',
+            );
+            video.currentTime = 3_723;
+            textarea.dispatchEvent(
+                new KeyboardEvent('keydown', { code: 'KeyM', altKey: true, bubbles: true }),
+            );
+            expect(textarea.value).toBe('Intro [1:23] first point\n[1:02:03] ');
+
+            const jumps = [...document.querySelectorAll<HTMLButtonElement>('.youtube-side-jump')];
+            expect(jumps.map((jump) => jump.textContent)).toEqual(['1:23first point', '1:02:03']);
+            jumps[0]?.click();
+            expect(video.currentTime).toBe(83);
+
+            await wait(600);
+            expect(noteOf('vidTime001')).toBe('Intro [1:23] first point\n[1:02:03] ');
+            panel.destroy();
+        });
+
+        it('saves the title and channel with the notes once the page shows the video', async () => {
+            document.body.insertAdjacentHTML(
+                'afterbegin',
+                '<ytd-watch-metadata><h1>Linear Algebra</h1><div id="channel-name"><a href="/@math">Math Channel</a></div></ytd-watch-metadata>',
+            );
+            const panel = new StudyPanel();
+            panel.mount(below, 'vidMeta001');
+            const status = await panel.captureBookmark();
+            expect(status).toBe('Bookmarked 0:15');
+            expect(storedStudy(mock)?.videos.vidMeta001).toMatchObject({
+                title: 'Linear Algebra',
+                channel: 'Math Channel',
+            });
+        });
+
+        it('explains a full video instead of a storage error', async () => {
+            mock.data['youtubeSideStudy:vidFull001'] = {
+                bookmarks: Array.from({ length: 1_000 }, (_, index) => ({
+                    timeMs: index,
+                    createdAt: index,
+                })),
+            };
+            const panel = new StudyPanel();
+            panel.mount(below, 'vidFull001');
+            const status = await panel.captureBookmark();
+            expect(status).toBe('A video keeps at most 1000 bookmarks.');
+            expect(query('.youtube-side-notice').textContent).toBe(status);
+        });
+
+        it('shows notes another tab saved, but never redraws over its own typing', async () => {
+            const panel = new StudyPanel();
+            panel.mount(below, 'vidSync001');
+            panel.setView('notes');
+            await wait();
+
+            // another tab writes without this page's writer tag
+            await mock.chrome.storage.local.set({
+                'youtubeSideStudy:vidSync001': { note: 'From another tab', bookmarks: [] },
+            });
+            await wait();
+            expect(query<HTMLTextAreaElement>('textarea').value).toBe('From another tab');
+
+            const textarea = query<HTMLTextAreaElement>('textarea');
+            textarea.focus();
+            await mock.chrome.storage.local.set({
+                'youtubeSideStudy:vidSync001': { note: 'Second change', bookmarks: [] },
+            });
+            await wait();
+            expect(query<HTMLTextAreaElement>('textarea')).toBe(textarea);
+            panel.destroy();
+        });
     });
 });

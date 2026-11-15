@@ -40,6 +40,7 @@ import {
 
 import {
     inputStyle,
+    StyledHint,
     StyledNotice,
     StyledOptionRow,
     StyledPopup,
@@ -103,6 +104,12 @@ const DimensionField = ({ name, value, min, max, atChange }: DimensionFieldPrope
             style={inputStyle}
         />
     );
+};
+
+export const LIBRARY_PAGE = 'library.html';
+
+const openLibrary = () => {
+    void chrome.tabs.create({ url: chrome.runtime.getURL(LIBRARY_PAGE) });
 };
 
 const sendToActiveTab = async (request: SideRequest): Promise<SideStatus> => {
@@ -283,6 +290,16 @@ const Popup = () => {
                 <StyledNotice>Suspended in {sideStatus.suspendReason}</StyledNotice>
             )}
 
+            {sideStatus?.layout === 'panels' && (
+                <StyledNotice>
+                    YouTube's new layout keeps the description and comments in its own panel
+                </StyledNotice>
+            )}
+
+            {sideStatus?.dodged && (
+                <StyledNotice>Moved to the other side while YouTube's panel is open</StyledNotice>
+            )}
+
             {sideStatus?.available && (
                 <InputSwitch
                     name="side position [⌥ + S]"
@@ -375,7 +392,7 @@ const Popup = () => {
                 min={WIDTH_MIN}
                 max={WIDTH_MAX}
                 atChange={(width) => {
-                    changeOption({ width }, true);
+                    changeOption({ width, customSize: true }, true);
                 }}
             />
 
@@ -385,7 +402,7 @@ const Popup = () => {
                 min={HEIGHT_MIN}
                 max={HEIGHT_MAX}
                 atChange={(height) => {
-                    changeOption({ height }, true);
+                    changeOption({ height, customSize: true }, true);
                 }}
             />
 
@@ -398,6 +415,40 @@ const Popup = () => {
                 theme={dewiki}
                 style={inputStyle}
             />
+
+            <StyledSection>
+                <h2>In the Panel</h2>
+
+                <InputSwitch
+                    name="description"
+                    checked={options.showDescription}
+                    atChange={() => {
+                        changeOption({ showDescription: !options.showDescription });
+                    }}
+                    theme={dewiki}
+                    style={inputStyle}
+                />
+
+                <InputSwitch
+                    name="comments"
+                    checked={options.showComments}
+                    atChange={() => {
+                        changeOption({ showComments: !options.showComments });
+                    }}
+                    theme={dewiki}
+                    style={inputStyle}
+                />
+
+                <InputSwitch
+                    name="live chat"
+                    checked={options.showChat}
+                    atChange={() => {
+                        changeOption({ showChat: !options.showChat });
+                    }}
+                    theme={dewiki}
+                    style={inputStyle}
+                />
+            </StyledSection>
 
             {/* Adaptive Layout Section */}
             <StyledSection>
@@ -479,6 +530,16 @@ const Popup = () => {
                             style={inputStyle}
                         />
 
+                        <InputSwitch
+                            name="bookmarks on the progress bar"
+                            checked={options.bookmarkMarkers}
+                            atChange={() => {
+                                changeOption({ bookmarkMarkers: !options.bookmarkMarkers });
+                            }}
+                            theme={dewiki}
+                            style={inputStyle}
+                        />
+
                         <StyledOptionRow>
                             <div>auto-open view</div>
                             <Dropdown
@@ -495,8 +556,18 @@ const Popup = () => {
                                 width={110}
                             />
                         </StyledOptionRow>
+                        <StyledHint>
+                            ⌥ + M bookmarks the moment, or inserts the time in a note
+                        </StyledHint>
                     </>
                 )}
+
+                <LinkButton
+                    text="notes library"
+                    atClick={openLibrary}
+                    theme={dewiki}
+                    inline={true}
+                />
             </StyledSection>
 
             <div>

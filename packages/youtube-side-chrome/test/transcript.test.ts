@@ -9,6 +9,7 @@ import {
     filterTranscriptSegments,
     findCurrentSegmentIndex,
     getCachedTranscript,
+    isReadingYouTubePanel,
     isTranscriptButton,
     loadTranscriptFromPanel,
     MAX_TRANSCRIPT_SEGMENTS,
@@ -56,8 +57,12 @@ const modernSegment = (time: string, text: string) => `
         <span class="ytAttributedStringHost" role="text">${text}</span>
     </transcript-segment-view-model>`;
 
-const transcriptPanel = (segments: string, visibility = 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED') => `
-    <ytd-engagement-panel-section-list-renderer target-id="PAmodern_transcript_view" visibility="${visibility}">
+const transcriptPanel = (
+    segments: string,
+    visibility = 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED',
+    targetId: string | null = 'PAmodern_transcript_view',
+) => `
+    <ytd-engagement-panel-section-list-renderer ${targetId === null ? '' : `target-id="${targetId}"`} visibility="${visibility}">
         <div id="visibility-button"><button aria-label="Close"></button></div>
         <div id="content">${segments}</div>
     </ytd-engagement-panel-section-list-renderer>`;
@@ -434,6 +439,65 @@ describe('transcript module', () => {
             expect(closeClicks).toHaveBeenCalledTimes(1);
             expect(seenAsUserClick).toEqual([false]);
             expect(getCachedTranscript('openVideo1')).toBe(transcript);
+        });
+
+        // recorded on 2026-11-15: some videos open a transcript panel that has no target-id
+        it('closes the panel it opened even when YouTube gives it no target id', async () => {
+            jest.useFakeTimers();
+            document.body.innerHTML = `
+                <ytd-watch-flexy video-id="noTarget01"></ytd-watch-flexy>
+                <ytd-video-description-transcript-section-renderer>
+                    <button>Show transcript</button>
+                </ytd-video-description-transcript-section-renderer>
+                <div id="panels">${transcriptPanel('', 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED', 'engagement-panel-macro-markers-description-chapters')}</div>`;
+
+            const panels = document.getElementById('panels') as HTMLElement;
+            const closed: string[] = [];
+            document.querySelector('button')?.addEventListener('click', () => {
+                panels.insertAdjacentHTML(
+                    'beforeend',
+                    transcriptPanel(
+                        modernSegment('0:00', 'Hi.'),
+                        'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED',
+                        null,
+                    ),
+                );
+                for (const close of panels.querySelectorAll('#visibility-button button')) {
+                    close.addEventListener('click', () => {
+                        const panel = close.closest('ytd-engagement-panel-section-list-renderer');
+                        panel?.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_HIDDEN');
+                        closed.push(panel?.getAttribute('target-id') ?? 'no target');
+                    });
+                }
+            });
+
+            const pending = loadTranscriptFromPanel({ videoId: 'noTarget01', openPanel: true });
+            expect(isReadingYouTubePanel()).toBe(true);
+            await jest.advanceTimersByTimeAsync(1_000);
+            expect((await pending)?.segments).toHaveLength(1);
+
+            // only the transcript panel this module opened; the user's chapters panel stays
+            expect(closed).toEqual(['no target']);
+            expect(isReadingYouTubePanel()).toBe(false);
+        });
+
+        it('leaves a transcript panel the user already opened, even without a target id', async () => {
+            jest.useFakeTimers();
+            document.body.innerHTML = `
+                <ytd-watch-flexy video-id="userOpen01"></ytd-watch-flexy>
+                <ytd-video-description-transcript-section-renderer>
+                    <button>Show transcript</button>
+                </ytd-video-description-transcript-section-renderer>
+                <div id="panels">${transcriptPanel(modernSegment('0:00', 'Already here.'), 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED', null)}</div>`;
+            const close = jest.fn();
+            document.querySelector('#visibility-button button')?.addEventListener('click', close);
+
+            const pending = loadTranscriptFromPanel({ videoId: 'userOpen01', openPanel: true });
+            await jest.advanceTimersByTimeAsync(1_000);
+            expect((await pending)?.segments.map((segment) => segment.text)).toEqual([
+                'Already here.',
+            ]);
+            expect(close).not.toHaveBeenCalled();
         });
 
         it('waits for the page to show the video before using its button', async () => {
